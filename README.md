@@ -1,8 +1,11 @@
 # expe3000 (Go Version)
 
-A multimedia stimulus delivery system designed for experimental psychology and neuroscience tasks requiring millisecond-accurate timing and low-latency audio.
+**Work in progress**
+
+A multimedia stimulus delivery system designed for experimental psychology and neuroscience tasks requiring accurate timing and low-latency audio.
 
 This is a port of the original `expe3000` (C version) to Go, using the [go-sdl3](https://github.com/Zyko0/go-sdl3) bindings.
+
 
 ## Overview
 
@@ -46,7 +49,7 @@ go build -o expe3000-gui ./cmd/expe3000-gui
 
 ## Usage
 
-### GUI Mode (Recommended)
+### GUI Mode
 Running the GUI version opens an **Interactive Setup Window**:
 ```bash
 ./expe3000-gui
@@ -90,13 +93,9 @@ onset_time,duration,type,cond,stimuli
 - **Note**: Use `1` (or any small value) for sounds as they play until finished, but the duration column is still required.
 - **Escape**: Press **Escape** at any time to interrupt the experiment.
 
-## Key Changes from C Version
 
-- **Software Mixer**: Implemented in pure Go for better thread-safety and compatibility.
-- **Serial Communication**: Uses `go.bug.st/serial` for native cross-platform support without CGo.
-- **Resource Caching**: Uses Go's internal maps for efficient asset management.
-- **GUI Setup**: Re-implemented with SDL3/TTF and native file dialogs for a consistent experience.
-- **CI/CD**: Automated builds for all major platforms via GitHub Actions.
+Note: Under Linux, you can minimize video latencies by runining the cli version of expe3000  from a linux console (e.g. by pressing Ctrl-Alt-F3) and after stopping the graphics server with `systemctl stop gdm`. Thus, you will bypass x11 or wayland composers and use the Direct Rendering Manager kernel module. 
+
 
 ## License & Credits
 
