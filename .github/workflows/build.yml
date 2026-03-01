@@ -1,0 +1,69 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+            extension: .exe
+          - goos: windows
+            goarch: arm64
+            extension: .exe
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+
+      - name: Build
+        run: |
+          mkdir -p dist
+          
+          # Get version info similar to build.sh
+          VERSION=$(git describe --tags --always 2>/dev/null || echo "dev")
+          COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+          BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          
+          LDFLAGS="-X 'expe3000/internal/version.Version=$VERSION' \
+                   -X 'expe3000/internal/version.GitCommit=$COMMIT' \
+                   -X 'expe3000/internal/version.BuildTime=$BUILD_TIME'"
+          
+          # Build CLI
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 \
+          go build -ldflags "$LDFLAGS" -o dist/expe3000-$VERSION-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.extension }} ./cmd/expe3000
+          
+          # Build GUI
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 \
+          go build -ldflags "$LDFLAGS" -o dist/expe3000-gui-$VERSION-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.extension }} ./cmd/expe3000-gui
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: expe3000-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*

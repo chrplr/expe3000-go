@@ -2,6 +2,7 @@ package engine
 
 import (
 	"encoding/csv"
+	"expe3000/internal/version"
 	"os"
 	"runtime/debug"
 	"strconv"
@@ -60,7 +61,7 @@ func (l *EventLog) Save(path string) error {
 	w := csv.NewWriter(f)
 	defer w.Flush()
 
-	w.Write([]string{"# expe3000 version: 1.0.0 (Go version)"})
+	w.Write([]string{"# expe3000 version: " + version.Version + " (Go version)"})
 	w.Write([]string{"# Author: Christophe Pallier (christophe@pallier.org)"})
 	w.Write([]string{"# GitHub: https://github.com/chrplr/expe3000"})
 	w.Write([]string{"# SDL Version: " + l.SDLVersion})
