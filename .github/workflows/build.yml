@@ -67,14 +67,16 @@ jobs:
           cp experiment.csv dist/ 2>/dev/null || true
           if [ -d "assets" ]; then cp -r assets dist/; fi
 
-          # Create archives
-          cd dist
+          # Create archives with a parent folder
+          ARCHIVE_NAME=expe3000-$VERSION-${{ matrix.goos }}-${{ matrix.goarch }}
+          mkdir $ARCHIVE_NAME
+          cp -r dist/* $ARCHIVE_NAME/
+          
           if [ "${{ matrix.goos }}" == "windows" ]; then
-            zip -r ../expe3000-$VERSION-${{ matrix.goos }}-${{ matrix.goarch }}.zip *
+            zip -r $ARCHIVE_NAME.zip $ARCHIVE_NAME
           else
-            tar -czvf ../expe3000-$VERSION-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz *
+            tar -czvf $ARCHIVE_NAME.tar.gz $ARCHIVE_NAME
           fi
-          cd ..
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
