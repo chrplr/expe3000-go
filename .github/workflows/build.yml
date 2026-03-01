@@ -81,3 +81,24 @@ jobs:
         with:
           name: expe3000-${{ matrix.goos }}-${{ matrix.goarch }}
           path: expe3000-*.*
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: expe3000-*
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/expe3000-*.*
+          generate_release_notes: true
