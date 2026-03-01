@@ -1,5 +1,5 @@
 subject_id=xxx
-csv_file=/home/cp983411/00_git/expe3000/go-expe3000/experiment.csv
+csv_file=/home/cp983411/00_git/expe3000-go/experiment.csv
 output_file=results.csv
 stimuli_dir=/home/cp983411/00_git/expe3000/assets
 screen_w=800
