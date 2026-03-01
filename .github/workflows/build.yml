@@ -62,8 +62,22 @@ jobs:
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 \
           go build -ldflags "$LDFLAGS" -o dist/expe3000-gui-$VERSION-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.extension }} ./cmd/expe3000-gui
 
+          # Package assets if they exist (optional, but good for a complete package)
+          cp README.md dist/README.txt 2>/dev/null || true
+          cp experiment.csv dist/ 2>/dev/null || true
+          if [ -d "assets" ]; then cp -r assets dist/; fi
+
+          # Create archives
+          cd dist
+          if [ "${{ matrix.goos }}" == "windows" ]; then
+            zip -r ../expe3000-$VERSION-${{ matrix.goos }}-${{ matrix.goarch }}.zip *
+          else
+            tar -czvf ../expe3000-$VERSION-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz *
+          fi
+          cd ..
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: expe3000-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: dist/*
+          path: expe3000-*.*
