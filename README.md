@@ -35,6 +35,21 @@ Stimuli are presented according to a fixed, predefined schedule. Although keypre
 ### Precompiled Binaries
 Check the [GitHub Releases](https://github.com/chrplr/expe3000-go/releases) for automated builds for your platform.
 
+Artifacts are named `expe3000-<version>-<os>-<arch>-binary`. Choose the one matching your system:
+
+- **OS**: `linux`, `windows`, or `macos`.
+- **Architecture**:
+    - **x86_64**: For Intel or AMD 64-bit processors.
+    - **arm64**: For Apple Silicon (M1/M2/M3/M4) or ARM-based Windows/Linux machines.
+
+**How to check your architecture:**
+- **Linux/macOS**: Open a terminal and run `uname -m`.
+  - `x86_64` → Download the **x86_64** version.
+  - `arm64` or `aarch64` → Download the **arm64** version.
+- **Windows**: Open a command prompt and run `echo %PROCESSOR_ARCHITECTURE%` or check **Settings > System > About**.
+  - `AMD64` → Download the **x86_64** version.
+  - `ARM64` → Download the **arm64** version.
+
 ### Building from Source
 To build both the CLI and GUI versions with version metadata:
 ```bash
