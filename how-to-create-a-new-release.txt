@@ -1,0 +1,13 @@
+#! /bin/bash
+
+if [[ $1 ]]
+then
+ TAG=$1
+else
+ TAG=vX.X.X
+fi
+
+git commit -m '...'
+git tag ${TAG}
+git push origin main
+git push origin {$TAG}

@@ -17,18 +17,30 @@ jobs:
         include:
           - goos: linux
             goarch: amd64
+            artifact_os: linux
+            artifact_arch: x86_64
           - goos: linux
             goarch: arm64
+            artifact_os: linux
+            artifact_arch: arm64
           - goos: windows
             goarch: amd64
+            artifact_os: windows
+            artifact_arch: x86_64
             extension: .exe
           - goos: windows
             goarch: arm64
+            artifact_os: windows
+            artifact_arch: arm64
             extension: .exe
           - goos: darwin
             goarch: amd64
+            artifact_os: macos
+            artifact_arch: x86_64
           - goos: darwin
             goarch: arm64
+            artifact_os: macos
+            artifact_arch: arm64
 
     steps:
       - name: Checkout code
@@ -56,11 +68,11 @@ jobs:
           
           # Build CLI
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 \
-          go build -ldflags "$LDFLAGS" -o dist/expe3000-$VERSION-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.extension }} ./cmd/expe3000
+          go build -ldflags "$LDFLAGS" -o dist/expe3000-$VERSION-${{ matrix.artifact_os }}-${{ matrix.artifact_arch }}-binary${{ matrix.extension }} ./cmd/expe3000
           
           # Build GUI
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 \
-          go build -ldflags "$LDFLAGS" -o dist/expe3000-gui-$VERSION-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.extension }} ./cmd/expe3000-gui
+          go build -ldflags "$LDFLAGS" -o dist/expe3000-gui-$VERSION-${{ matrix.artifact_os }}-${{ matrix.artifact_arch }}-binary${{ matrix.extension }} ./cmd/expe3000-gui
 
           # Package assets if they exist (optional, but good for a complete package)
           cp README.md dist/README.txt 2>/dev/null || true
@@ -68,7 +80,7 @@ jobs:
           if [ -d "assets" ]; then cp -r assets dist/; fi
 
           # Create archives with a parent folder
-          ARCHIVE_NAME=expe3000-$VERSION-${{ matrix.goos }}-${{ matrix.goarch }}
+          ARCHIVE_NAME=expe3000-$VERSION-${{ matrix.artifact_os }}-${{ matrix.artifact_arch }}-binary
           mkdir $ARCHIVE_NAME
           cp -r dist/* $ARCHIVE_NAME/
           
@@ -81,7 +93,7 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: expe3000-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: expe3000-${{ matrix.artifact_os }}-${{ matrix.artifact_arch }}-binary
           path: expe3000-*.*
 
   release:
