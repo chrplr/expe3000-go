@@ -53,13 +53,19 @@ func Run(cfg *Config) {
 		font, err = ttf.OpenFont(cfg.FontFile, float32(cfg.FontSize))
 		if err != nil {
 			fmt.Printf("Failed to load font: %s (%v)\n", cfg.FontFile, err)
+			cfg.FontFile = "" // Clear it if it failed to load
 		}
-	} else {
+	}
+
+	// If no font loaded yet (either none specified or loading failed), try default
+	if font == nil {
 		fontPath := GetDefaultFontPath()
 		if fontPath != "" {
 			font, err = ttf.OpenFont(fontPath, float32(cfg.FontSize))
 			if err != nil {
 				fmt.Printf("Failed to load default font: %s (%v)\n", fontPath, err)
+			} else {
+				cfg.FontFile = fontPath
 			}
 		}
 	}
@@ -99,9 +105,9 @@ func Run(cfg *Config) {
 	}
 
 	mixer := NewAudioMixer()
-	spec := &sdl.AudioSpec{Format: sdl.AUDIO_S16, Channels: 2, Freq: 44100}
+	spec := DefaultAudioSpec()
 	cb := sdl.NewAudioStreamCallback(mixer.Callback)
-	stream := sdl.AUDIO_DEVICE_DEFAULT_PLAYBACK.OpenAudioDeviceStream(spec, cb)
+	stream := sdl.AUDIO_DEVICE_DEFAULT_PLAYBACK.OpenAudioDeviceStream(&spec, cb)
 	if stream == nil {
 		fmt.Printf("Failed to open audio stream\n")
 		os.Exit(1)

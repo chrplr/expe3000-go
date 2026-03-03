@@ -12,6 +12,15 @@ const (
 	AudioScratchBytes = 4096
 )
 
+func DefaultAudioSpec() sdl.AudioSpec {
+	return sdl.AudioSpec{Format: sdl.AUDIO_S16, Channels: 2, Freq: 44100}
+}
+
+type SoundResource struct {
+	Data []byte
+	Spec sdl.AudioSpec
+}
+
 type ActiveSound struct {
 	Resource *SoundResource
 	PlayPos  uint32
@@ -81,6 +90,15 @@ func (m *AudioMixer) Callback(stream *sdl.AudioStream, additionalAmount, totalAm
 }
 
 func (m *AudioMixer) Play(res *SoundResource) bool {
+	if res == nil || res.Data == nil {
+		return false
+	}
+
+	target := DefaultAudioSpec()
+	if res.Spec.Format != target.Format || res.Spec.Channels != target.Channels || res.Spec.Freq != target.Freq {
+		return false
+	}
+
 	m.Mutex.Lock()
 	defer m.Mutex.Unlock()
 

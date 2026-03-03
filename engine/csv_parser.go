@@ -113,14 +113,20 @@ func LoadExperiment(path string) (*Experiment, error) {
 		case "text":
 			stype = StimText
 			filePaths = []string{stimRaw}
-		case "stream":
-			stype = StimStream
+		case "stream", "image_stream":
+			stype = StimImageStream
 			filePaths = strings.Split(stimRaw, "~")
 			for i, p := range filePaths {
 				filePaths[i] = strings.TrimSpace(p)
 			}
 		case "text_stream":
 			stype = StimTextStream
+			filePaths = strings.Split(stimRaw, "~")
+			for i, p := range filePaths {
+				filePaths[i] = strings.TrimSpace(p)
+			}
+		case "sound_stream":
+			stype = StimSoundStream
 			filePaths = strings.Split(stimRaw, "~")
 			for i, p := range filePaths {
 				filePaths[i] = strings.TrimSpace(p)

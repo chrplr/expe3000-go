@@ -6,8 +6,9 @@ const (
 	StimImage StimType = iota
 	StimSound
 	StimText
-	StimStream
+	StimImageStream
 	StimTextStream
+	StimSoundStream
 	StimEnd
 )
 

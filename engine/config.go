@@ -65,9 +65,9 @@ func (cfg *Config) SaveCache() {
 	} else {
 		fmt.Fprintf(f, "fullscreen=0\n")
 	}
-	fmt.Fprintf(f, "bg_color=%d,%d,%d\n", cfg.BGColor.R, cfg.BGColor.G, cfg.BGColor.B)
-	fmt.Fprintf(f, "text_color=%d,%d,%d\n", cfg.TextColor.R, cfg.TextColor.G, cfg.TextColor.B)
-	fmt.Fprintf(f, "fixation_color=%d,%d,%d\n", cfg.FixationColor.R, cfg.FixationColor.G, cfg.FixationColor.B)
+	fmt.Fprintf(f, "bg_color=%d,%d,%d,%d\n", cfg.BGColor.R, cfg.BGColor.G, cfg.BGColor.B, cfg.BGColor.A)
+	fmt.Fprintf(f, "text_color=%d,%d,%d,%d\n", cfg.TextColor.R, cfg.TextColor.G, cfg.TextColor.B, cfg.TextColor.A)
+	fmt.Fprintf(f, "fixation_color=%d,%d,%d,%d\n", cfg.FixationColor.R, cfg.FixationColor.G, cfg.FixationColor.B, cfg.FixationColor.A)
 }
 
 func (cfg *Config) LoadCache() {
@@ -115,7 +115,7 @@ func (cfg *Config) LoadCache() {
 func DefaultConfig() *Config {
 	return &Config{
 		OutputFile:    "results.csv",
-		FontSize:      24,
+		FontSize:      50,
 		ScreenWidth:   1920,
 		ScreenHeight:  1080,
 		ScaleFactor:   1.0,

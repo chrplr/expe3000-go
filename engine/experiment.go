@@ -181,12 +181,17 @@ func RunExperiment(cfg *Config, exp *Experiment, resources []Resource, renderer 
 	cs := 0
 	avi := -1
 	var vet uint64
+
+	// Variables for SOUND_STREAM
+	csidx := -1   // current sound index in a stream
+	var csvet uint64 // next sound onset time in a stream
+	var pulse2OffTime uint64
+
 	run := true
 	aborted := false
 
 	for run {
-		ct := sdl.Ticks() - stTicks
-
+		// Poll events first
 		for {
 			var ev sdl.Event
 			if !sdl.PollEvent(&ev) {
@@ -197,6 +202,7 @@ func RunExperiment(cfg *Config, exp *Experiment, resources []Resource, renderer 
 				run = false
 				aborted = true
 			case sdl.EVENT_KEY_DOWN:
+				ctResponse := sdl.Ticks() - stTicks
 				if ev.KeyboardEvent().Key == sdl.K_ESCAPE {
 					run = false
 					aborted = true
@@ -207,48 +213,87 @@ func RunExperiment(cfg *Config, exp *Experiment, resources []Resource, renderer 
 					} else if cs > 0 && cs-1 < len(exp.Stimuli) {
 						activeRow = exp.Stimuli[cs-1].RawRow
 					}
-					log.Log(ct, ct, "RESPONSE", ev.KeyboardEvent().Key.KeyName(), activeRow)
+					log.Log(ctResponse, ctResponse, "RESPONSE", ev.KeyboardEvent().Key.KeyName(), activeRow)
 				}
 			}
+		}
+
+		if !run {
+			break
+		}
+
+		// Update current time AFTER event polling in milliseconds
+		ct := sdl.Ticks() - stTicks
+
+		// Handle pulse-like DLP unsets
+		if pulse2OffTime > 0 && ct >= pulse2OffTime {
+			dlp.Unset("2")
+			pulse2OffTime = 0
 		}
 
 		trig := false
 		tidx := -1
 		if cs < len(exp.Stimuli) && (ct+laMS) >= exp.Stimuli[cs].TimestampMS {
 			s := &exp.Stimuli[cs]
-			if (s.Type == StimImage || s.Type == StimText || s.Type == StimStream || s.Type == StimTextStream) && len(resources[cs].Textures) > 0 {
+			if (s.Type == StimImage || s.Type == StimText || s.Type == StimImageStream || s.Type == StimTextStream) && len(resources[cs].Textures) > 0 {
 				avi = cs
 				trig = true
 				tidx = cs
-				if s.Type == StimStream || s.Type == StimTextStream {
+				if s.Type == StimImageStream || s.Type == StimTextStream {
 					vet = ct + (s.DurationMS * uint64(len(resources[cs].Textures)))
 				} else {
 					vet = ct + s.DurationMS
 				}
 				if dlp != nil {
-					if s.Type == StimImage || s.Type == StimStream {
+					if s.Type == StimImage || s.Type == StimImageStream {
 						dlp.Set("1")
 					} else {
 						dlp.Set("3")
 					}
 				}
-			} else if s.Type == StimSound && resources[cs].Sound.Data != nil {
-				if mixer.Play(&resources[cs].Sound) {
+			} else if s.Type == StimSound && len(resources[cs].Sounds) > 0 {
+				if mixer.Play(&resources[cs].Sounds[0]) {
 					log.Log(s.TimestampMS, ct, "SOUND_ONSET", s.FilePaths[0], s.RawRow)
 					if dlp != nil {
 						dlp.Set("2")
-						dlp.Delay(5)
-						dlp.Unset("2")
+						pulse2OffTime = ct + 5
 					}
 				}
+			} else if s.Type == StimSoundStream && len(resources[cs].Sounds) > 0 {
+				csidx = 0
+				if mixer.Play(&resources[cs].Sounds[0]) {
+					log.Log(s.TimestampMS, ct, "SOUND_STREAM_ONSET", strings.Join(s.FilePaths, "~"), s.RawRow)
+					if dlp != nil {
+						dlp.Set("2")
+						pulse2OffTime = ct + 5
+					}
+				}
+				csvet = ct + s.DurationMS
 			}
 			cs++
+		}
+
+		// Handle next sounds in a SOUND_STREAM
+		if csidx != -1 && csidx+1 < len(resources[cs-1].Sounds) && ct >= csvet {
+			csidx++
+			s := &exp.Stimuli[cs-1]
+			if mixer.Play(&resources[cs-1].Sounds[csidx]) {
+				log.Log(s.TimestampMS+(uint64(csidx)*s.DurationMS), ct, "SOUND_STREAM_FRAME", s.FilePaths[csidx], s.RawRow)
+				if dlp != nil {
+					dlp.Set("2")
+					pulse2OffTime = ct + 5
+				}
+			}
+			csvet = ct + s.DurationMS
+			if csidx == len(resources[cs-1].Sounds)-1 {
+				csidx = -1 // Finished stream
+			}
 		}
 
 		if avi != -1 && ct >= vet {
 			s := &exp.Stimuli[avi]
 			intendedOff := s.TimestampMS + s.DurationMS
-			if s.Type == StimStream || s.Type == StimTextStream {
+			if s.Type == StimImageStream || s.Type == StimTextStream {
 				intendedOff = s.TimestampMS + (s.DurationMS * uint64(len(resources[avi].Textures)))
 			}
 			label := strings.Join(s.FilePaths, "~")
@@ -256,14 +301,14 @@ func RunExperiment(cfg *Config, exp *Experiment, resources []Resource, renderer 
 			switch s.Type {
 			case StimText:
 				stype = "TEXT_OFFSET"
-			case StimStream:
-				stype = "STREAM_OFFSET"
+			case StimImageStream:
+				stype = "IMAGE_STREAM_OFFSET"
 			case StimTextStream:
 				stype = "TEXT_STREAM_OFFSET"
 			}
 			log.Log(intendedOff, ct, stype, label, s.RawRow)
 			if dlp != nil {
-				if s.Type == StimImage || s.Type == StimStream {
+				if s.Type == StimImage || s.Type == StimImageStream {
 					dlp.Unset("1")
 				} else {
 					dlp.Unset("3")
@@ -281,9 +326,9 @@ func RunExperiment(cfg *Config, exp *Experiment, resources []Resource, renderer 
 		if avi != -1 {
 			r := &resources[avi]
 			s := &exp.Stimuli[avi]
-			
+
 			frameIdx := 0
-			if s.Type == StimStream || s.Type == StimTextStream {
+			if s.Type == StimImageStream || s.Type == StimTextStream {
 				elapsed := ct - (vet - (s.DurationMS * uint64(len(r.Textures))))
 				frameIdx = int(elapsed / s.DurationMS)
 				if frameIdx >= len(r.Textures) {
@@ -318,13 +363,14 @@ func RunExperiment(cfg *Config, exp *Experiment, resources []Resource, renderer 
 			switch s.Type {
 			case StimText:
 				stype = "TEXT_ONSET"
-			case StimStream:
-				stype = "STREAM_ONSET"
+			case StimImageStream:
+				stype = "IMAGE_STREAM_ONSET"
 			case StimTextStream:
 				stype = "TEXT_STREAM_ONSET"
 			}
 			log.Log(s.TimestampMS, ot, stype, label, s.RawRow)
-			if s.Type == StimStream || s.Type == StimTextStream {
+			// Adjust vet to be relative to actual onset
+			if s.Type == StimImageStream || s.Type == StimTextStream {
 				vet = ot + (s.DurationMS * uint64(len(resources[tidx].Textures)))
 			} else {
 				vet = ot + s.DurationMS

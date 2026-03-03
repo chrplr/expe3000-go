@@ -49,15 +49,10 @@ func GetDefaultFontPath() string {
 	return ""
 }
 
-type SoundResource struct {
-	Data []byte
-	Spec sdl.AudioSpec
-}
-
 type Resource struct {
 	Textures []*sdl.Texture
 	W, H     []float32
-	Sound    SoundResource
+	Sounds   []SoundResource
 }
 
 type CacheEntry struct {
@@ -78,22 +73,25 @@ func NewResourceCache() *ResourceCache {
 
 func (c *ResourceCache) Load(renderer *sdl.Renderer, exp *Experiment, font *ttf.Font, textColor sdl.Color, stimuliDir string) ([]Resource, error) {
 	resources := make([]Resource, len(exp.Stimuli))
-	targetSpec := sdl.AudioSpec{Format: sdl.AUDIO_S16, Channels: 2, Freq: 44100}
+	targetSpec := DefaultAudioSpec()
 
 	for i, s := range exp.Stimuli {
 		resources[i] = Resource{
 			Textures: make([]*sdl.Texture, 0, len(s.FilePaths)),
 			W:        make([]float32, 0, len(s.FilePaths)),
 			H:        make([]float32, 0, len(s.FilePaths)),
+			Sounds:   make([]SoundResource, 0, len(s.FilePaths)),
 		}
 
 		for _, path := range s.FilePaths {
 			// Determine single asset type for caching
 			assetType := s.Type
-			if assetType == StimStream {
+			if assetType == StimImageStream {
 				assetType = StimImage
 			} else if assetType == StimTextStream {
 				assetType = StimText
+			} else if assetType == StimSoundStream {
+				assetType = StimSound
 			}
 
 			key := fmt.Sprintf("%d:%s", assetType, path)
@@ -103,8 +101,8 @@ func (c *ResourceCache) Load(renderer *sdl.Renderer, exp *Experiment, font *ttf.
 					resources[i].W = append(resources[i].W, entry.W)
 					resources[i].H = append(resources[i].H, entry.H)
 				}
-				if assetType == StimSound {
-					resources[i].Sound = entry.Sound
+				if assetType == StimSound && entry.Sound.Data != nil {
+					resources[i].Sounds = append(resources[i].Sounds, entry.Sound)
 				}
 				continue
 			}
@@ -116,45 +114,48 @@ func (c *ResourceCache) Load(renderer *sdl.Renderer, exp *Experiment, font *ttf.
 			case StimImage:
 				tex, err := img.LoadTexture(renderer, fullPath)
 				if err != nil {
-					fmt.Printf("Failed to load image: %s (%v)\n", fullPath, err)
-				} else {
-					entry.Texture = tex
-					w, h, _ := tex.Size()
-					entry.W, entry.H = w, h
+					return nil, fmt.Errorf("failed to load image: %s (%v)", fullPath, err)
 				}
+				entry.Texture = tex
+				w, h, _ := tex.Size()
+				entry.W, entry.H = w, h
 			case StimSound:
 				spec := &sdl.AudioSpec{}
 				data, err := sdl.LoadWAV(fullPath, spec)
 				if err != nil {
-					fmt.Printf("Failed to load sound %s: %v\n", fullPath, err)
+					return nil, fmt.Errorf("failed to load sound %s: %v", fullPath, err)
+				}
+				if spec.Format == targetSpec.Format && spec.Channels == targetSpec.Channels && spec.Freq == targetSpec.Freq {
+					entry.Sound.Spec = *spec
+					entry.Sound.Data = data
 				} else {
-					if spec.Format == targetSpec.Format && spec.Channels == targetSpec.Channels && spec.Freq == targetSpec.Freq {
-						entry.Sound.Spec = *spec
-						entry.Sound.Data = data
-					} else {
-						dstData, err := sdl.ConvertAudioSamples(spec, data, &targetSpec)
-						if err != nil {
-							fmt.Printf("Failed to convert sound %s: %v\n", fullPath, err)
-							entry.Sound.Spec = *spec
-							entry.Sound.Data = data
-						} else {
-							entry.Sound.Spec = targetSpec
-							entry.Sound.Data = dstData
-						}
+					dstData, err := sdl.ConvertAudioSamples(spec, data, &targetSpec)
+					if err != nil {
+						return nil, fmt.Errorf("failed to convert sound %s to target format: %v", fullPath, err)
 					}
+					entry.Sound.Spec = targetSpec
+					entry.Sound.Data = dstData
 				}
 			case StimText:
 				if font != nil {
 					surf, err := font.RenderTextBlended(path, textColor)
-					if err == nil && surf != nil {
-						tex, err := renderer.CreateTextureFromSurface(surf)
-						if err == nil {
-							entry.Texture = tex
-							entry.W = float32(surf.W)
-							entry.H = float32(surf.H)
-						}
-						surf.Destroy()
+					if err != nil {
+						return nil, fmt.Errorf("failed to render text '%s': %v", path, err)
 					}
+					if surf == nil {
+						return nil, fmt.Errorf("failed to render text '%s': null surface", path)
+					}
+					tex, err := renderer.CreateTextureFromSurface(surf)
+					if err != nil {
+						surf.Destroy()
+						return nil, fmt.Errorf("failed to create texture for text '%s': %v", path, err)
+					}
+					entry.Texture = tex
+					entry.W = float32(surf.W)
+					entry.H = float32(surf.H)
+					surf.Destroy()
+				} else {
+					return nil, fmt.Errorf("cannot render text stimulus (no font loaded)")
 				}
 			}
 
@@ -165,7 +166,7 @@ func (c *ResourceCache) Load(renderer *sdl.Renderer, exp *Experiment, font *ttf.
 				resources[i].H = append(resources[i].H, entry.H)
 			}
 			if assetType == StimSound {
-				resources[i].Sound = entry.Sound
+				resources[i].Sounds = append(resources[i].Sounds, entry.Sound)
 			}
 		}
 	}

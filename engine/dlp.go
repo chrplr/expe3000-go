@@ -2,7 +2,6 @@ package engine
 
 import (
 	"fmt"
-	"time"
 
 	"go.bug.st/serial"
 )
@@ -103,8 +102,4 @@ func (d *DLPIO8G) Unset(lines string) {
 	if err != nil {
 		fmt.Printf("write error in dlp Unset: %v\n", err)
 	}
-}
-
-func (d *DLPIO8G) Delay(ms int) {
-	time.Sleep(time.Duration(ms) * time.Millisecond)
 }

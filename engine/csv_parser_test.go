@@ -37,6 +37,7 @@ func TestLoadExperimentStream(t *testing.T) {
 	content := `onset_time,duration,type,stimuli
 0,100,stream,img1.png~img2.png~img3.png
 1000,200,text_stream,word1~word2~word3
+2000,300,sound_stream,s1.wav~s2.wav~s3.wav
 `
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.csv")
@@ -47,7 +48,7 @@ func TestLoadExperimentStream(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	if exp.Stimuli[0].Type != StimStream || len(exp.Stimuli[0].FilePaths) != 3 {
+	if exp.Stimuli[0].Type != StimImageStream || len(exp.Stimuli[0].FilePaths) != 3 {
 		t.Errorf("failed to parse stream, got %+v", exp.Stimuli[0])
 	}
 	if exp.Stimuli[0].FilePaths[1] != "img2.png" {
@@ -56,6 +57,10 @@ func TestLoadExperimentStream(t *testing.T) {
 
 	if exp.Stimuli[1].Type != StimTextStream || len(exp.Stimuli[1].FilePaths) != 3 {
 		t.Errorf("failed to parse text_stream, got %+v", exp.Stimuli[1])
+	}
+
+	if exp.Stimuli[2].Type != StimSoundStream || len(exp.Stimuli[2].FilePaths) != 3 {
+		t.Errorf("failed to parse sound_stream, got %+v", exp.Stimuli[2])
 	}
 }
 

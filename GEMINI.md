@@ -47,9 +47,12 @@ The core of the system is the `RunExperiment` function in `engine/experiment.go`
 ### Stimulus Types
 - **IMAGE / TEXT**: Standard visual stimuli.
 - **SOUND**: Audio stimuli (played via a custom software mixer).
-- **STREAM / TEXT_STREAM**: High-speed rapid serial visual presentation (RSVP). 
+- **IMAGE_STREAM / TEXT_STREAM**: High-speed rapid serial visual presentation (RSVP). 
     - Multiple assets (image paths or text strings) are specified in the CSV `stimuli` column, separated by the `~` character.
     - Each frame in the stream is displayed for the duration specified in the `duration` column.
+- **SOUND_STREAM**: Rapid sequence of audio stimuli.
+    - Multiple sound files separated by `~`.
+    - The `duration` column specifies the **SOA (Stimulus Onset Asynchrony)** between sounds.
 
 ### Resource Management
 - **Resource Cache:** All textures and sounds are pre-loaded into a `ResourceCache` before the experiment begins to avoid disk I/O during the critical timing loop.

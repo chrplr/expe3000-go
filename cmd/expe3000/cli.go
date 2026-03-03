@@ -27,7 +27,7 @@ func main() {
 	startSplash := flag.String("start-splash", "", "Start splash image")
 	endSplash := flag.String("end-splash", "", "End splash image")
 	fontFile := flag.String("font", "", "TTF font file")
-	fontSize := flag.Int("font-size", 24, "Font size")
+	fontSize := flag.Int("font-size", 50, "Font size")
 	dlpDevice := flag.String("dlp", "", "DLP-IO8-G device")
 	screenW := flag.Int("width", 1920, "Screen width")
 	screenH := flag.Int("height", 1080, "Screen height")

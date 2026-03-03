@@ -85,6 +85,7 @@ Running the GUI version opens an **Interactive Setup Window**:
 - `-font`: Path to a TTF font file for text stimuli.
 - `-output`: Path for the results CSV file (default: `results.csv`).
 - `-width`, `-height`: Screen resolution (default: 1920x1080).
+- `-font-size`: Font size for text stimuli (default: 50).
 - `-fullscreen`: Run in fullscreen mode.
 - `-no-vsync`: Disable VSync (not recommended for precise timing).
 - `-no-fixation`: Disable the fixation cross.
@@ -104,11 +105,13 @@ onset_time,duration,type,cond,stimuli
 4000,500,IMAGE,Body,body03.png
 5000,1,SOUND,Animal,sound02.wav
 ```
-- **Types**: `IMAGE`, `SOUND`, `TEXT`, `STREAM`, `TEXT_STREAM`.
-- **STREAM**: Displays a sequence of images in rapid succession. The `stimuli` column should contain image filenames separated by `~`. Each image is displayed for the duration specified in the `duration` column.
-  - *Example*: `2000,100,STREAM,Face,face01.png~face02.png~face12.png` (total duration 300ms)
+- **Types**: `IMAGE`, `SOUND`, `TEXT`, `IMAGE_STREAM`, `TEXT_STREAM`, `SOUND_STREAM`.
+- **IMAGE_STREAM**: Displays a sequence of images in rapid succession. The `stimuli` column should contain image filenames separated by `~`. Each image is displayed for the duration specified in the `duration` column.
+  - *Example*: `2000,100,IMAGE_STREAM,Face,face01.png~face02.png~face12.png` (total duration 300ms)
 - **TEXT_STREAM**: Displays a sequence of text strings in rapid succession. The `stimuli` column should contain strings separated by `~`. Each string is displayed for the duration specified in the `duration` column.
   - *Example*: `4000,150,TEXT_STREAM,Greeting,Hello~World~Rapid~Stream` (total duration 600ms)
+- **SOUND_STREAM**: Plays a sequence of sound files. The `stimuli` column should contain sound filenames separated by `~`. The `duration` column specifies the **Stimulus Onset Asynchrony (SOA)**, which is the time between the start of each sound.
+  - *Example*: `7000,200,SOUND_STREAM,Tones,sound01.wav~sound02.wav~sound01.wav` (starts a new sound every 200ms)
 - **Note**: For `SOUND`, use `1` (or any small value) as they play until finished, but the duration column is still required.
 - **Escape**: Press **Escape** at any time to interrupt the experiment.
 
