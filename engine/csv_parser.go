@@ -100,13 +100,31 @@ func LoadExperiment(path string) (*Experiment, error) {
 		}
 
 		var stype StimType
+		var filePaths []string
+		stimRaw := strings.TrimSpace(record[idxStimuli])
+
 		switch strings.ToLower(strings.TrimSpace(record[idxType])) {
 		case "image":
 			stype = StimImage
+			filePaths = []string{stimRaw}
 		case "sound":
 			stype = StimSound
+			filePaths = []string{stimRaw}
 		case "text":
 			stype = StimText
+			filePaths = []string{stimRaw}
+		case "stream":
+			stype = StimStream
+			filePaths = strings.Split(stimRaw, "~")
+			for i, p := range filePaths {
+				filePaths[i] = strings.TrimSpace(p)
+			}
+		case "text_stream":
+			stype = StimTextStream
+			filePaths = strings.Split(stimRaw, "~")
+			for i, p := range filePaths {
+				filePaths[i] = strings.TrimSpace(p)
+			}
 		default:
 			return nil, fmt.Errorf("line %d: unknown stimulus type: %s", i+1, record[idxType])
 		}
@@ -115,7 +133,7 @@ func LoadExperiment(path string) (*Experiment, error) {
 			TimestampMS: timestamp,
 			DurationMS:  duration,
 			Type:        stype,
-			FilePath:    strings.TrimSpace(record[idxStimuli]),
+			FilePaths:   filePaths,
 			RawRow:      record,
 		})
 	}

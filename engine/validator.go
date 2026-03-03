@@ -26,17 +26,19 @@ func ValidateExperiment(exp *Experiment, stimuliDir string) []error {
 			}
 		}
 
-		if stim.Type == StimImage || stim.Type == StimSound {
-			expectedPath := filepath.Join(stimuliDir, stim.FilePath)
-			info, err := os.Stat(expectedPath)
-			if err != nil {
-				if os.IsNotExist(err) {
-					errors = append(errors, fmt.Errorf("stimulus %d (at %dms): resource file not found: %s", i+1, stim.TimestampMS, expectedPath))
-				} else {
-					errors = append(errors, fmt.Errorf("stimulus %d (at %dms): error checking resource file: %v", i+1, stim.TimestampMS, err))
+		if stim.Type == StimImage || stim.Type == StimSound || stim.Type == StimStream {
+			for _, path := range stim.FilePaths {
+				expectedPath := filepath.Join(stimuliDir, path)
+				info, err := os.Stat(expectedPath)
+				if err != nil {
+					if os.IsNotExist(err) {
+						errors = append(errors, fmt.Errorf("stimulus %d (at %dms): resource file not found: %s", i+1, stim.TimestampMS, expectedPath))
+					} else {
+						errors = append(errors, fmt.Errorf("stimulus %d (at %dms): error checking resource file: %v", i+1, stim.TimestampMS, err))
+					}
+				} else if info.IsDir() {
+					errors = append(errors, fmt.Errorf("stimulus %d (at %dms): expected file, got directory: %s", i+1, stim.TimestampMS, expectedPath))
 				}
-			} else if info.IsDir() {
-				errors = append(errors, fmt.Errorf("stimulus %d (at %dms): expected file, got directory: %s", i+1, stim.TimestampMS, expectedPath))
 			}
 		}
 	}

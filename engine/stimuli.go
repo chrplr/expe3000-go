@@ -6,6 +6,8 @@ const (
 	StimImage StimType = iota
 	StimSound
 	StimText
+	StimStream
+	StimTextStream
 	StimEnd
 )
 
@@ -13,7 +15,7 @@ type Stimulus struct {
 	TimestampMS uint64
 	DurationMS  uint64
 	Type        StimType
-	FilePath    string
+	FilePaths   []string
 	RawRow      []string
 }
 

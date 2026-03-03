@@ -104,8 +104,12 @@ onset_time,duration,type,cond,stimuli
 4000,500,IMAGE,Body,body03.png
 5000,1,SOUND,Animal,sound02.wav
 ```
-- **Types**: `IMAGE`, `SOUND`, `TEXT`.
-- **Note**: Use `1` (or any small value) for sounds as they play until finished, but the duration column is still required.
+- **Types**: `IMAGE`, `SOUND`, `TEXT`, `STREAM`, `TEXT_STREAM`.
+- **STREAM**: Displays a sequence of images in rapid succession. The `stimuli` column should contain image filenames separated by `~`. Each image is displayed for the duration specified in the `duration` column.
+  - *Example*: `2000,100,STREAM,Face,face01.png~face02.png~face12.png` (total duration 300ms)
+- **TEXT_STREAM**: Displays a sequence of text strings in rapid succession. The `stimuli` column should contain strings separated by `~`. Each string is displayed for the duration specified in the `duration` column.
+  - *Example*: `4000,150,TEXT_STREAM,Greeting,Hello~World~Rapid~Stream` (total duration 600ms)
+- **Note**: For `SOUND`, use `1` (or any small value) as they play until finished, but the duration column is still required.
 - **Escape**: Press **Escape** at any time to interrupt the experiment.
 
 

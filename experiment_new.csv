@@ -1,0 +1,6 @@
+onset_time,duration,type,cond,stimuli
+1000,500,IMAGE,SingleImage,body01.png
+2000,1,SOUND,Beep,sound01.wav
+3000,500,TEXT,StaticText,Welcome to expe3000!
+4000,100,STREAM,FaceSequence,face01.png~face02.png~face12.png
+5500,150,TEXT_STREAM,RSVP,The~quick~brown~fox~jumps

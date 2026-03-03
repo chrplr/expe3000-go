@@ -40,9 +40,16 @@ go test ./engine/...
 ## Development Conventions
 
 ### High-Precision Timing Loop
-The core of the system is the `RunExperiment` function in `engine/run.go`. It uses a predictive onset look-ahead strategy (`laMS`) and VSYNC synchronization to ensure stimuli are presented exactly when intended. 
+The core of the system is the `RunExperiment` function in `engine/experiment.go`. It uses a predictive onset look-ahead strategy (`laMS`) and VSYNC synchronization to ensure stimuli are presented exactly when intended. 
 - **Critical Section:** Garbage collection is disabled (`debug.SetGCPercent(-1)`) during the experimental loop to prevent latency spikes.
 - **Event Logging:** Every onset, offset, and user response is logged with both intended and actual timestamps (in milliseconds).
+
+### Stimulus Types
+- **IMAGE / TEXT**: Standard visual stimuli.
+- **SOUND**: Audio stimuli (played via a custom software mixer).
+- **STREAM / TEXT_STREAM**: High-speed rapid serial visual presentation (RSVP). 
+    - Multiple assets (image paths or text strings) are specified in the CSV `stimuli` column, separated by the `~` character.
+    - Each frame in the stream is displayed for the duration specified in the `duration` column.
 
 ### Resource Management
 - **Resource Cache:** All textures and sounds are pre-loaded into a `ResourceCache` before the experiment begins to avoid disk I/O during the critical timing loop.
@@ -55,9 +62,3 @@ The core of the system is the `RunExperiment` function in `engine/run.go`. It us
 ### Platform Support
 - **Linux:** Optimized for console-mode execution (via DRM) to bypass X11/Wayland overhead for maximum precision.
 - **Windows/macOS:** Fully supported with automated builds via GitHub Actions.
-
-## Artifact Naming (CI/CD)
-Automated builds in `.github/workflows/build.yml` follow the naming convention:
-`expe3000-<version>-<artifact_os>-<artifact_arch>-binary`
-- `artifact_os` maps `darwin` to `macos`.
-- `artifact_arch` maps `amd64` to `x86_64`.

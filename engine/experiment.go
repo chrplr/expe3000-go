@@ -6,6 +6,7 @@ import (
 	"os"
 	"runtime/debug"
 	"strconv"
+	"strings"
 
 	"github.com/Zyko0/go-sdl3/img"
 	"github.com/Zyko0/go-sdl3/sdl"
@@ -215,13 +216,17 @@ func RunExperiment(cfg *Config, exp *Experiment, resources []Resource, renderer 
 		tidx := -1
 		if cs < len(exp.Stimuli) && (ct+laMS) >= exp.Stimuli[cs].TimestampMS {
 			s := &exp.Stimuli[cs]
-			if (s.Type == StimImage || s.Type == StimText) && resources[cs].Texture != nil {
+			if (s.Type == StimImage || s.Type == StimText || s.Type == StimStream || s.Type == StimTextStream) && len(resources[cs].Textures) > 0 {
 				avi = cs
 				trig = true
 				tidx = cs
-				vet = ct + s.DurationMS
+				if s.Type == StimStream || s.Type == StimTextStream {
+					vet = ct + (s.DurationMS * uint64(len(resources[cs].Textures)))
+				} else {
+					vet = ct + s.DurationMS
+				}
 				if dlp != nil {
-					if s.Type == StimImage {
+					if s.Type == StimImage || s.Type == StimStream {
 						dlp.Set("1")
 					} else {
 						dlp.Set("3")
@@ -229,7 +234,7 @@ func RunExperiment(cfg *Config, exp *Experiment, resources []Resource, renderer 
 				}
 			} else if s.Type == StimSound && resources[cs].Sound.Data != nil {
 				if mixer.Play(&resources[cs].Sound) {
-					log.Log(s.TimestampMS, ct, "SOUND_ONSET", s.FilePath, s.RawRow)
+					log.Log(s.TimestampMS, ct, "SOUND_ONSET", s.FilePaths[0], s.RawRow)
 					if dlp != nil {
 						dlp.Set("2")
 						dlp.Delay(5)
@@ -241,15 +246,24 @@ func RunExperiment(cfg *Config, exp *Experiment, resources []Resource, renderer 
 		}
 
 		if avi != -1 && ct >= vet {
-			intendedOff := exp.Stimuli[avi].TimestampMS + exp.Stimuli[avi].DurationMS
-			label := exp.Stimuli[avi].FilePath
-			stype := "IMAGE_OFFSET"
-			if exp.Stimuli[avi].Type == StimText {
-				stype = "TEXT_OFFSET"
+			s := &exp.Stimuli[avi]
+			intendedOff := s.TimestampMS + s.DurationMS
+			if s.Type == StimStream || s.Type == StimTextStream {
+				intendedOff = s.TimestampMS + (s.DurationMS * uint64(len(resources[avi].Textures)))
 			}
-			log.Log(intendedOff, ct, stype, label, exp.Stimuli[avi].RawRow)
+			label := strings.Join(s.FilePaths, "~")
+			stype := "IMAGE_OFFSET"
+			switch s.Type {
+			case StimText:
+				stype = "TEXT_OFFSET"
+			case StimStream:
+				stype = "STREAM_OFFSET"
+			case StimTextStream:
+				stype = "TEXT_STREAM_OFFSET"
+			}
+			log.Log(intendedOff, ct, stype, label, s.RawRow)
 			if dlp != nil {
-				if exp.Stimuli[avi].Type == StimImage {
+				if s.Type == StimImage || s.Type == StimStream {
 					dlp.Unset("1")
 				} else {
 					dlp.Unset("3")
@@ -266,13 +280,31 @@ func RunExperiment(cfg *Config, exp *Experiment, resources []Resource, renderer 
 		renderer.Clear()
 		if avi != -1 {
 			r := &resources[avi]
-			dr := sdl.FRect{
-				X: (float32(cfg.ScreenWidth) - (r.W * cfg.ScaleFactor)) / 2.0,
-				Y: (float32(cfg.ScreenHeight) - (r.H * cfg.ScaleFactor)) / 2.0,
-				W: r.W * cfg.ScaleFactor,
-				H: r.H * cfg.ScaleFactor,
+			s := &exp.Stimuli[avi]
+			
+			frameIdx := 0
+			if s.Type == StimStream || s.Type == StimTextStream {
+				elapsed := ct - (vet - (s.DurationMS * uint64(len(r.Textures))))
+				frameIdx = int(elapsed / s.DurationMS)
+				if frameIdx >= len(r.Textures) {
+					frameIdx = len(r.Textures) - 1
+				}
+				if frameIdx < 0 {
+					frameIdx = 0
+				}
 			}
-			renderer.RenderTexture(r.Texture, nil, &dr)
+
+			tex := r.Textures[frameIdx]
+			w := r.W[frameIdx]
+			h := r.H[frameIdx]
+
+			dr := sdl.FRect{
+				X: (float32(cfg.ScreenWidth) - (w * cfg.ScaleFactor)) / 2.0,
+				Y: (float32(cfg.ScreenHeight) - (h * cfg.ScaleFactor)) / 2.0,
+				W: w * cfg.ScaleFactor,
+				H: h * cfg.ScaleFactor,
+			}
+			renderer.RenderTexture(tex, nil, &dr)
 		} else if cfg.UseFixation {
 			drawFixationCross(renderer, cfg.ScreenWidth, cfg.ScreenHeight, cfg.FixationColor)
 		}
@@ -280,13 +312,23 @@ func RunExperiment(cfg *Config, exp *Experiment, resources []Resource, renderer 
 
 		if trig {
 			ot := sdl.Ticks() - stTicks
-			label := exp.Stimuli[tidx].FilePath
+			s := &exp.Stimuli[tidx]
+			label := strings.Join(s.FilePaths, "~")
 			stype := "IMAGE_ONSET"
-			if exp.Stimuli[tidx].Type == StimText {
+			switch s.Type {
+			case StimText:
 				stype = "TEXT_ONSET"
+			case StimStream:
+				stype = "STREAM_ONSET"
+			case StimTextStream:
+				stype = "TEXT_STREAM_ONSET"
 			}
-			log.Log(exp.Stimuli[tidx].TimestampMS, ot, stype, label, exp.Stimuli[tidx].RawRow)
-			vet = ot + exp.Stimuli[tidx].DurationMS
+			log.Log(s.TimestampMS, ot, stype, label, s.RawRow)
+			if s.Type == StimStream || s.Type == StimTextStream {
+				vet = ot + (s.DurationMS * uint64(len(resources[tidx].Textures)))
+			} else {
+				vet = ot + s.DurationMS
+			}
 		}
 
 		if !cfg.VSync {

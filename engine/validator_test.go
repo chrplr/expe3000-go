@@ -13,9 +13,9 @@ func TestValidateExperiment(t *testing.T) {
 
 	exp := &Experiment{
 		Stimuli: []Stimulus{
-			{TimestampMS: 0, DurationMS: 1000, Type: StimImage, FilePath: "image.png"},
-			{TimestampMS: 1000, DurationMS: 500, Type: StimImage, FilePath: "missing.png"},
-			{TimestampMS: 500, DurationMS: 500, Type: StimText, FilePath: "Text"},
+			{TimestampMS: 0, DurationMS: 1000, Type: StimImage, FilePaths: []string{"image.png"}},
+			{TimestampMS: 1000, DurationMS: 500, Type: StimImage, FilePaths: []string{"missing.png"}},
+			{TimestampMS: 500, DurationMS: 500, Type: StimText, FilePaths: []string{"Text"}},
 		},
 	}
 
