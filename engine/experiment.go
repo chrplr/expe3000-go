@@ -62,39 +62,50 @@ func (l *EventLog) Save(path string) error {
 	w := csv.NewWriter(f)
 	defer w.Flush()
 
-	w.Write([]string{"# expe3000 version: " + version.Version + " (Go version)"})
-	w.Write([]string{"# Author: Christophe Pallier (christophe@pallier.org)"})
-	w.Write([]string{"# GitHub: https://github.com/chrplr/expe3000"})
-	w.Write([]string{"# SDL Version: " + l.SDLVersion})
-	w.Write([]string{"# Platform: " + l.Platform})
-	w.Write([]string{"# Hostname: " + l.Hostname})
-	w.Write([]string{"# Username: " + l.Username})
-	w.Write([]string{"# Video Driver: " + l.VideoDriver})
-	w.Write([]string{"# Audio Driver: " + l.AudioDriver})
-	w.Write([]string{"# Renderer: " + l.Renderer})
-	if l.DisplayMode != "" {
-		w.Write([]string{"# Display Mode: " + l.DisplayMode})
+	// Write metadata
+	metadata := [][]string{
+		{"# expe3000 version: " + version.Version + " (Go version)"},
+		{"# Author: Christophe Pallier (christophe@pallier.org)"},
+		{"# GitHub: https://github.com/chrplr/expe3000"},
+		{"# SDL Version: " + l.SDLVersion},
+		{"# Platform: " + l.Platform},
+		{"# Hostname: " + l.Hostname},
+		{"# Username: " + l.Username},
+		{"# Video Driver: " + l.VideoDriver},
+		{"# Audio Driver: " + l.AudioDriver},
+		{"# Renderer: " + l.Renderer},
 	}
-	w.Write([]string{"# Logical Resolution: " + l.LogicalResolution})
+	if l.DisplayMode != "" {
+		metadata = append(metadata, []string{"# Display Mode: " + l.DisplayMode})
+	}
+	metadata = append(metadata, []string{"# Logical Resolution: " + l.LogicalResolution})
+
 	fontName := l.Font
 	if fontName == "" {
 		fontName = "none"
 	}
-	w.Write([]string{"# Font: " + fontName})
-	w.Write([]string{"# Font Size: " + strconv.Itoa(l.FontSize)})
-	w.Write([]string{"# Start Date: " + l.StartTime})
-	w.Write([]string{"# End Date: " + l.EndTime})
+	metadata = append(metadata, []string{"# Font: " + fontName})
+	metadata = append(metadata, []string{"# Font Size: " + strconv.Itoa(l.FontSize)})
+	metadata = append(metadata, []string{"# Start Date: " + l.StartTime})
+	metadata = append(metadata, []string{"# End Date: " + l.EndTime})
+
 	completedStr := "Completed Normally"
 	if !l.Completed {
 		completedStr = "Aborted (ESC or Quit)"
 	}
-	w.Write([]string{"# Completion Status: " + completedStr})
-	w.Write([]string{"# Command Line: " + l.CommandLine})
+	metadata = append(metadata, []string{"# Completion Status: " + completedStr})
+	metadata = append(metadata, []string{"# Command Line: " + l.CommandLine})
 
+	for _, m := range metadata {
+		w.Write(m)
+	}
+
+	// Write data header
 	outputHdr := []string{"subject_id", "intended_ms", "actual_ms", "type", "label"}
 	outputHdr = append(outputHdr, l.CSVHeader...)
 	w.Write(outputHdr)
 
+	// Write data entries
 	for _, e := range l.Entries {
 		row := []string{
 			l.SubjectID,
@@ -162,8 +173,215 @@ func drawFixationCross(renderer *sdl.Renderer, w, h int, color sdl.Color) {
 	renderer.RenderLine(mx, my-CrossSize, mx, my+CrossSize)
 }
 
+type experimentState struct {
+	cfg       *Config
+	exp       *Experiment
+	resources []Resource
+	renderer  *sdl.Renderer
+	mixer     *AudioMixer
+	log       *EventLog
+	dlp       *DLPIO8G
+	font      *ttf.Font
+
+	stMS uint64 // Start time in MS
+	ctMS uint64 // Current time in MS relative to start
+
+	csIndex     int    // Current stimulus index
+	activeVisual int    // Active visual stimulus index (-1 if none)
+	visualEndMS  uint64 // End time for active visual stimulus
+
+	csidxSoundStream int    // Current sound index in a sound stream
+	csvetSoundStream uint64 // Next sound onset time in a sound stream
+
+	pulse2OffMS uint64 // Time to unset DLP line 2
+
+	run     bool
+	aborted bool
+
+	laMS uint64 // Look-ahead in MS
+}
+
+func (s *experimentState) handleEvents() {
+	for {
+		var ev sdl.Event
+		if !sdl.PollEvent(&ev) {
+			break
+		}
+		switch ev.Type {
+		case sdl.EVENT_QUIT:
+			s.run = false
+			s.aborted = true
+		case sdl.EVENT_KEY_DOWN:
+			ctMS := sdl.Ticks() - s.stMS
+			if ev.KeyboardEvent().Key == sdl.K_ESCAPE {
+				s.run = false
+				s.aborted = true
+			} else {
+				var activeRow []string
+				if s.activeVisual != -1 {
+					activeRow = s.exp.Stimuli[s.activeVisual].RawRow
+				} else if s.csIndex > 0 && s.csIndex-1 < len(s.exp.Stimuli) {
+					activeRow = s.exp.Stimuli[s.csIndex-1].RawRow
+				}
+				s.log.Log(ctMS, ctMS, "RESPONSE", ev.KeyboardEvent().Key.KeyName(), activeRow)
+			}
+		}
+	}
+}
+
+func (s *experimentState) update() (bool, int) {
+	s.ctMS = sdl.Ticks() - s.stMS
+
+	// Handle pulse-like DLP unsets
+	if s.pulse2OffMS > 0 && s.ctMS >= s.pulse2OffMS {
+		s.dlp.Unset("2")
+		s.pulse2OffMS = 0
+	}
+
+	trig := false
+	tidx := -1
+
+	// Check for new stimulus onset
+	if s.csIndex < len(s.exp.Stimuli) {
+		stim := &s.exp.Stimuli[s.csIndex]
+		onsetMS := stim.TimestampMS
+
+		if (s.ctMS + s.laMS) >= onsetMS {
+			if (stim.Type == StimImage || stim.Type == StimText || stim.Type == StimImageStream || stim.Type == StimTextStream) && len(s.resources[s.csIndex].Textures) > 0 {
+				s.activeVisual = s.csIndex
+				trig = true
+				tidx = s.csIndex
+				if stim.Type == StimImageStream || stim.Type == StimTextStream {
+					s.visualEndMS = s.ctMS + (stim.DurationMS * uint64(len(s.resources[s.csIndex].Textures)))
+				} else {
+					s.visualEndMS = s.ctMS + stim.DurationMS
+				}
+
+				if s.dlp != nil {
+					if stim.Type == StimImage || stim.Type == StimImageStream {
+						s.dlp.Set("1")
+					} else {
+						s.dlp.Set("3")
+					}
+				}
+			} else if stim.Type == StimSound && len(s.resources[s.csIndex].Sounds) > 0 {
+				if s.mixer.Play(&s.resources[s.csIndex].Sounds[0]) {
+					s.log.Log(stim.TimestampMS, s.ctMS, "SOUND_ONSET", stim.FilePaths[0], stim.RawRow)
+					if s.dlp != nil {
+						s.dlp.Set("2")
+						s.pulse2OffMS = s.ctMS + 5
+					}
+				}
+			} else if stim.Type == StimSoundStream && len(s.resources[s.csIndex].Sounds) > 0 {
+				s.csidxSoundStream = 0
+				if s.mixer.Play(&s.resources[s.csIndex].Sounds[0]) {
+					s.log.Log(stim.TimestampMS, s.ctMS, "SOUND_STREAM_ONSET", strings.Join(stim.FilePaths, "~"), stim.RawRow)
+					if s.dlp != nil {
+						s.dlp.Set("2")
+						s.pulse2OffMS = s.ctMS + 5
+					}
+				}
+				s.csvetSoundStream = s.ctMS + stim.DurationMS
+			}
+			s.csIndex++
+		}
+	}
+
+	// Handle Sound Streams
+	if s.csidxSoundStream != -1 && s.csidxSoundStream+1 < len(s.resources[s.csIndex-1].Sounds) && s.ctMS >= s.csvetSoundStream {
+		s.csidxSoundStream++
+		stim := &s.exp.Stimuli[s.csIndex-1]
+		if s.mixer.Play(&s.resources[s.csIndex-1].Sounds[s.csidxSoundStream]) {
+			intendedMS := stim.TimestampMS + (uint64(s.csidxSoundStream) * stim.DurationMS)
+			s.log.Log(intendedMS, s.ctMS, "SOUND_STREAM_FRAME", stim.FilePaths[s.csidxSoundStream], stim.RawRow)
+			if s.dlp != nil {
+				s.dlp.Set("2")
+				s.pulse2OffMS = s.ctMS + 5
+			}
+		}
+		s.csvetSoundStream = s.ctMS + stim.DurationMS
+		if s.csidxSoundStream == len(s.resources[s.csIndex-1].Sounds)-1 {
+			s.csidxSoundStream = -1
+		}
+	}
+
+	// Handle Visual Offsets
+	if s.activeVisual != -1 && s.ctMS >= s.visualEndMS {
+		stim := &s.exp.Stimuli[s.activeVisual]
+		durationMS := stim.DurationMS
+		if stim.Type == StimImageStream || stim.Type == StimTextStream {
+			durationMS = stim.DurationMS * uint64(len(s.resources[s.activeVisual].Textures))
+		}
+		intendedOffMS := stim.TimestampMS + durationMS
+		label := strings.Join(stim.FilePaths, "~")
+		stype := "IMAGE_OFFSET"
+		switch stim.Type {
+		case StimText:
+			stype = "TEXT_OFFSET"
+		case StimImageStream:
+			stype = "IMAGE_STREAM_OFFSET"
+		case StimTextStream:
+			stype = "TEXT_STREAM_OFFSET"
+		}
+		s.log.Log(intendedOffMS, s.ctMS, stype, label, stim.RawRow)
+
+		if s.dlp != nil {
+			if stim.Type == StimImage || stim.Type == StimImageStream {
+				s.dlp.Unset("1")
+			} else {
+				s.dlp.Unset("3")
+			}
+		}
+		s.activeVisual = -1
+	}
+
+	// Check if finished
+	if s.csIndex >= len(s.exp.Stimuli) && s.activeVisual == -1 && s.ctMS >= s.cfg.TotalDuration {
+		s.run = false
+	}
+
+	return trig, tidx
+}
+
+func (s *experimentState) render() {
+	s.renderer.SetDrawColor(s.cfg.BGColor.R, s.cfg.BGColor.G, s.cfg.BGColor.B, s.cfg.BGColor.A)
+	s.renderer.Clear()
+
+	if s.activeVisual != -1 {
+		r := &s.resources[s.activeVisual]
+		stim := &s.exp.Stimuli[s.activeVisual]
+
+		frameIdx := 0
+		if stim.Type == StimImageStream || stim.Type == StimTextStream {
+			totalDuration := stim.DurationMS * uint64(len(r.Textures))
+			elapsed := s.ctMS - (s.visualEndMS - totalDuration)
+			frameIdx = int(elapsed / stim.DurationMS)
+			if frameIdx >= len(r.Textures) {
+				frameIdx = len(r.Textures) - 1
+			}
+			if frameIdx < 0 {
+				frameIdx = 0
+			}
+		}
+
+		tex := r.Textures[frameIdx]
+		w := r.W[frameIdx]
+		h := r.H[frameIdx]
+
+		dr := sdl.FRect{
+			X: (float32(s.cfg.ScreenWidth) - (w * s.cfg.ScaleFactor)) / 2.0,
+			Y: (float32(s.cfg.ScreenHeight) - (h * s.cfg.ScaleFactor)) / 2.0,
+			W: w * s.cfg.ScaleFactor,
+			H: h * s.cfg.ScaleFactor,
+		}
+		s.renderer.RenderTexture(tex, nil, &dr)
+	} else if s.cfg.UseFixation {
+		drawFixationCross(s.renderer, s.cfg.ScreenWidth, s.cfg.ScreenHeight, s.cfg.FixationColor)
+	}
+	s.renderer.Present()
+}
+
 func RunExperiment(cfg *Config, exp *Experiment, resources []Resource, renderer *sdl.Renderer, mixer *AudioMixer, log *EventLog, dlp *DLPIO8G, font *ttf.Font) bool {
-	// Disable Garbage Collection entirely during the critical rendering loop to avoid jitter latencies.
 	prevGC := debug.SetGCPercent(-1)
 	defer debug.SetGCPercent(prevGC)
 
@@ -175,192 +393,40 @@ func RunExperiment(cfg *Config, exp *Experiment, resources []Resource, renderer 
 		rr = mode.RefreshRate
 	}
 	fdMS := uint64(1000.0 / rr)
-	laMS := fdMS / 2
 
-	stTicks := sdl.Ticks()
-	cs := 0
-	avi := -1
-	var vet uint64
+	state := &experimentState{
+		cfg:              cfg,
+		exp:              exp,
+		resources:        resources,
+		renderer:         renderer,
+		mixer:            mixer,
+		log:              log,
+		dlp:              dlp,
+		font:             font,
+		csIndex:          0,
+		activeVisual:     -1,
+		csidxSoundStream: -1,
+		run:              true,
+		laMS:             fdMS / 2,
+	}
 
-	// Variables for SOUND_STREAM
-	csidx := -1   // current sound index in a stream
-	var csvet uint64 // next sound onset time in a stream
-	var pulse2OffTime uint64
+	state.stMS = sdl.Ticks()
 
-	run := true
-	aborted := false
-
-	for run {
-		// Poll events first
-		for {
-			var ev sdl.Event
-			if !sdl.PollEvent(&ev) {
-				break
-			}
-			switch ev.Type {
-			case sdl.EVENT_QUIT:
-				run = false
-				aborted = true
-			case sdl.EVENT_KEY_DOWN:
-				ctResponse := sdl.Ticks() - stTicks
-				if ev.KeyboardEvent().Key == sdl.K_ESCAPE {
-					run = false
-					aborted = true
-				} else {
-					var activeRow []string
-					if avi != -1 {
-						activeRow = exp.Stimuli[avi].RawRow
-					} else if cs > 0 && cs-1 < len(exp.Stimuli) {
-						activeRow = exp.Stimuli[cs-1].RawRow
-					}
-					log.Log(ctResponse, ctResponse, "RESPONSE", ev.KeyboardEvent().Key.KeyName(), activeRow)
-				}
-			}
-		}
-
-		if !run {
+	for state.run {
+		state.handleEvents()
+		if !state.run {
 			break
 		}
 
-		// Update current time AFTER event polling in milliseconds
-		ct := sdl.Ticks() - stTicks
-
-		// Handle pulse-like DLP unsets
-		if pulse2OffTime > 0 && ct >= pulse2OffTime {
-			dlp.Unset("2")
-			pulse2OffTime = 0
-		}
-
-		trig := false
-		tidx := -1
-		if cs < len(exp.Stimuli) && (ct+laMS) >= exp.Stimuli[cs].TimestampMS {
-			s := &exp.Stimuli[cs]
-			if (s.Type == StimImage || s.Type == StimText || s.Type == StimImageStream || s.Type == StimTextStream) && len(resources[cs].Textures) > 0 {
-				avi = cs
-				trig = true
-				tidx = cs
-				if s.Type == StimImageStream || s.Type == StimTextStream {
-					vet = ct + (s.DurationMS * uint64(len(resources[cs].Textures)))
-				} else {
-					vet = ct + s.DurationMS
-				}
-				if dlp != nil {
-					if s.Type == StimImage || s.Type == StimImageStream {
-						dlp.Set("1")
-					} else {
-						dlp.Set("3")
-					}
-				}
-			} else if s.Type == StimSound && len(resources[cs].Sounds) > 0 {
-				if mixer.Play(&resources[cs].Sounds[0]) {
-					log.Log(s.TimestampMS, ct, "SOUND_ONSET", s.FilePaths[0], s.RawRow)
-					if dlp != nil {
-						dlp.Set("2")
-						pulse2OffTime = ct + 5
-					}
-				}
-			} else if s.Type == StimSoundStream && len(resources[cs].Sounds) > 0 {
-				csidx = 0
-				if mixer.Play(&resources[cs].Sounds[0]) {
-					log.Log(s.TimestampMS, ct, "SOUND_STREAM_ONSET", strings.Join(s.FilePaths, "~"), s.RawRow)
-					if dlp != nil {
-						dlp.Set("2")
-						pulse2OffTime = ct + 5
-					}
-				}
-				csvet = ct + s.DurationMS
-			}
-			cs++
-		}
-
-		// Handle next sounds in a SOUND_STREAM
-		if csidx != -1 && csidx+1 < len(resources[cs-1].Sounds) && ct >= csvet {
-			csidx++
-			s := &exp.Stimuli[cs-1]
-			if mixer.Play(&resources[cs-1].Sounds[csidx]) {
-				log.Log(s.TimestampMS+(uint64(csidx)*s.DurationMS), ct, "SOUND_STREAM_FRAME", s.FilePaths[csidx], s.RawRow)
-				if dlp != nil {
-					dlp.Set("2")
-					pulse2OffTime = ct + 5
-				}
-			}
-			csvet = ct + s.DurationMS
-			if csidx == len(resources[cs-1].Sounds)-1 {
-				csidx = -1 // Finished stream
-			}
-		}
-
-		if avi != -1 && ct >= vet {
-			s := &exp.Stimuli[avi]
-			intendedOff := s.TimestampMS + s.DurationMS
-			if s.Type == StimImageStream || s.Type == StimTextStream {
-				intendedOff = s.TimestampMS + (s.DurationMS * uint64(len(resources[avi].Textures)))
-			}
-			label := strings.Join(s.FilePaths, "~")
-			stype := "IMAGE_OFFSET"
-			switch s.Type {
-			case StimText:
-				stype = "TEXT_OFFSET"
-			case StimImageStream:
-				stype = "IMAGE_STREAM_OFFSET"
-			case StimTextStream:
-				stype = "TEXT_STREAM_OFFSET"
-			}
-			log.Log(intendedOff, ct, stype, label, s.RawRow)
-			if dlp != nil {
-				if s.Type == StimImage || s.Type == StimImageStream {
-					dlp.Unset("1")
-				} else {
-					dlp.Unset("3")
-				}
-			}
-			avi = -1
-		}
-
-		if cs >= len(exp.Stimuli) && avi == -1 && ct >= cfg.TotalDuration {
-			run = false
-		}
-
-		renderer.SetDrawColor(cfg.BGColor.R, cfg.BGColor.G, cfg.BGColor.B, cfg.BGColor.A)
-		renderer.Clear()
-		if avi != -1 {
-			r := &resources[avi]
-			s := &exp.Stimuli[avi]
-
-			frameIdx := 0
-			if s.Type == StimImageStream || s.Type == StimTextStream {
-				elapsed := ct - (vet - (s.DurationMS * uint64(len(r.Textures))))
-				frameIdx = int(elapsed / s.DurationMS)
-				if frameIdx >= len(r.Textures) {
-					frameIdx = len(r.Textures) - 1
-				}
-				if frameIdx < 0 {
-					frameIdx = 0
-				}
-			}
-
-			tex := r.Textures[frameIdx]
-			w := r.W[frameIdx]
-			h := r.H[frameIdx]
-
-			dr := sdl.FRect{
-				X: (float32(cfg.ScreenWidth) - (w * cfg.ScaleFactor)) / 2.0,
-				Y: (float32(cfg.ScreenHeight) - (h * cfg.ScaleFactor)) / 2.0,
-				W: w * cfg.ScaleFactor,
-				H: h * cfg.ScaleFactor,
-			}
-			renderer.RenderTexture(tex, nil, &dr)
-		} else if cfg.UseFixation {
-			drawFixationCross(renderer, cfg.ScreenWidth, cfg.ScreenHeight, cfg.FixationColor)
-		}
-		renderer.Present()
+		trig, tidx := state.update()
+		state.render()
 
 		if trig {
-			ot := sdl.Ticks() - stTicks
-			s := &exp.Stimuli[tidx]
-			label := strings.Join(s.FilePaths, "~")
+			ot := sdl.Ticks() - state.stMS
+			stim := &state.exp.Stimuli[tidx]
+			label := strings.Join(stim.FilePaths, "~")
 			stype := "IMAGE_ONSET"
-			switch s.Type {
+			switch stim.Type {
 			case StimText:
 				stype = "TEXT_ONSET"
 			case StimImageStream:
@@ -368,12 +434,12 @@ func RunExperiment(cfg *Config, exp *Experiment, resources []Resource, renderer 
 			case StimTextStream:
 				stype = "TEXT_STREAM_ONSET"
 			}
-			log.Log(s.TimestampMS, ot, stype, label, s.RawRow)
-			// Adjust vet to be relative to actual onset
-			if s.Type == StimImageStream || s.Type == StimTextStream {
-				vet = ot + (s.DurationMS * uint64(len(resources[tidx].Textures)))
+			state.log.Log(stim.TimestampMS, ot, stype, label, stim.RawRow)
+
+			if stim.Type == StimImageStream || stim.Type == StimTextStream {
+				state.visualEndMS = ot + (stim.DurationMS * uint64(len(state.resources[tidx].Textures)))
 			} else {
-				vet = ot + s.DurationMS
+				state.visualEndMS = ot + stim.DurationMS
 			}
 		}
 
@@ -382,5 +448,5 @@ func RunExperiment(cfg *Config, exp *Experiment, resources []Resource, renderer 
 		}
 	}
 
-	return !aborted
+	return !state.aborted
 }
