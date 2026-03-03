@@ -4,7 +4,7 @@
 
 A multimedia stimulus delivery system designed for experimental psychology and neuroscience tasks requiring accurate timing and low-latency audio.
 
-This [software](http://github.com/chrplr/expe3000-go) is a port of [audiovis](https://https://chrplr.github.io/audiovis/) to Go, using the [go-sdl3](https://github.com/Zyko0/go-sdl3) bindings. A [C version of expe3000](http://https://github.com/chrplr/expe3000) also exists, with less functionnalities, which might provided better slightly better timing control in case Go is not good enough for you.
+[This app](http://github.com/chrplr/expe3000-go) is a port of [audiovis](https://chrplr.github.io/audiovis/) to Go, using the [go-sdl3](https://github.com/Zyko0/go-sdl3) bindings (see also an [implementation in C](https://github.com/chrplr/expe3000))
  
 ## Overview
 
