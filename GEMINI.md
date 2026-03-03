@@ -7,6 +7,7 @@
 - **Language:** Go (v1.25+)
 - **Graphics & Audio:** [SDL3](https://www.libsdl.org/) via [go-sdl3](https://github.com/Zyko0/go-sdl3) bindings.
 - **Serial Communication:** [go.bug.st/serial](https://github.com/bugst/go-serial) for DLP-IO8-G trigger devices (no CGo required).
+- **Configuration Parsing:** [github.com/BurntSushi/toml](https://github.com/BurntSushi/toml) for persisted settings.
 - **Architecture:**
     - `cmd/expe3000`: CLI entry point for terminal-based execution.
     - `cmd/expe3000-gui`: GUI entry point for interactive setup and execution.
@@ -41,6 +42,7 @@ go test ./engine/...
 
 ### High-Precision Timing Loop
 The core of the system is the `RunExperiment` function in `engine/experiment.go`. It uses a predictive onset look-ahead strategy (`laMS`) and VSYNC synchronization to ensure stimuli are presented exactly when intended. 
+- **Start Procedure:** After resource loading, a "Press any key to start" message is displayed at the center of the screen to ensure the participant is ready. This can be bypassed using the `--skip-wait` CLI flag or a GUI toggle.
 - **Critical Section:** Garbage collection is disabled (`debug.SetGCPercent(-1)`) during the experimental loop to prevent latency spikes.
 - **Event Logging:** Every onset, offset, and user response is logged with both intended and actual timestamps (in milliseconds).
 
@@ -58,9 +60,15 @@ The core of the system is the `RunExperiment` function in `engine/experiment.go`
 - **Resource Cache:** All textures and sounds are pre-loaded into a `ResourceCache` before the experiment begins to avoid disk I/O during the critical timing loop.
 - **Audio:** Uses a custom software mixer (`AudioMixer`) to ensure thread-safety and minimize startup latency.
 
+### GUI Setup
+The `expe3000-gui` provides a comprehensive, two-column interactive setup interface:
+- **Column 1:** File paths for CSV, Stimuli, Output, Start Splash, and Font (with browse buttons).
+- **Column 2:** Device and system settings (DLP, Display Index, Font Size), Resolution selection, and experimental options (Fixation, Fullscreen, Skip Wait).
+- **Persistence:** Settings are automatically saved to `.expe3000_cache` in TOML format upon starting an experiment.
+
 ### Configuration
 - **Experiment CSV:** Schedules are defined in CSV files with columns: `onset_time`, `duration`, `type`, and `stimuli`.
-- **Cache:** A `.expe3000_cache` file is used to persist the last-used settings in the GUI version.
+- **Cache:** A `.expe3000_cache` file is used to persist the last-used settings in TOML format.
 
 ### Platform Support
 - **Linux:** Optimized for console-mode execution (via DRM) to bypass X11/Wayland overhead for maximum precision.

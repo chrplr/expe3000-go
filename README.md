@@ -11,6 +11,22 @@ This is a port of the original `expe3000` (C version) to Go, using the [go-sdl3]
 
 Stimuli are presented according to a fixed, predefined schedule. Although keypress events are saved with a timestamp, the behavior of the program cannot be modified in real-time (e.g., immediate feedback). There is no notion of "trial." This approach is suitable for fMRI/MEG/EEG experiments with rigid stimulus presentation schedules.
 
+## Quick Start
+
+If you have already built the project (using `./build.sh`) or downloaded the binaries:
+
+1. **Launch the GUI**: Run `./expe3000-gui`.
+2. **Configure**: 
+   - Click the **"..."** button next to **Experiment CSV** and select `experiment_new.csv`.
+   - Ensure the **Stimuli Directory** points to the `assets` folder.
+3. **Start**: Click the green **START** button. 
+4. **Interact**: Press any key when the "Press any key to start" message appears to begin the stimulation.
+
+Alternatively, you can run the CLI version:
+```bash
+./expe3000 -csv experiment.csv -stimuli-dir assets
+```
+
 ## Features
 
 - **Precise Timing:** High-resolution timing loop with VSYNC synchronization and predictive onset look-ahead.

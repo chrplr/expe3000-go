@@ -39,6 +39,7 @@ func main() {
 	bgColorStr := flag.String("bg-color", "0,0,0,255", "Background color (R,G,B,A)")
 	textColorStr := flag.String("text-color", "255,255,255,255", "Text color (R,G,B,A)")
 	fixColorStr := flag.String("fixation-color", "255,255,255,255", "Fixation color (R,G,B,A)")
+        skipWait := flag.Bool("skip-wait", false, "Skip 'Press any key to start' message")
 
 	flag.Parse()
 
@@ -75,6 +76,7 @@ func main() {
 	cfg.BGColor = engine.ParseColor(*bgColorStr)
 	cfg.TextColor = engine.ParseColor(*textColorStr)
 	cfg.FixationColor = engine.ParseColor(*fixColorStr)
+        cfg.SkipWait = *skipWait
 
 	engine.Run(cfg)
 }

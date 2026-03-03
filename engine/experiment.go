@@ -164,6 +164,50 @@ func DisplaySplash(renderer *sdl.Renderer, filePath string, screenW, screenH int
 	return true
 }
 
+func WaitForKeyPress(renderer *sdl.Renderer, font *ttf.Font, screenW, screenH int, textColor, bgColor sdl.Color) bool {
+	if font == nil {
+		return true
+	}
+
+	surf, err := font.RenderTextBlended("Press any key to start", textColor)
+	if err != nil || surf == nil {
+		return true
+	}
+	defer surf.Destroy()
+
+	tex, err := renderer.CreateTextureFromSurface(surf)
+	if err != nil {
+		return true
+	}
+	defer tex.Destroy()
+
+	dst := sdl.FRect{
+		X: (float32(screenW) - float32(surf.W)) / 2.0,
+		Y: (float32(screenH) - float32(surf.H)) / 2.0,
+		W: float32(surf.W),
+		H: float32(surf.H),
+	}
+
+	renderer.SetDrawColor(bgColor.R, bgColor.G, bgColor.B, bgColor.A)
+	renderer.Clear()
+	renderer.RenderTexture(tex, nil, &dst)
+	renderer.Present()
+
+	for {
+		var event sdl.Event
+		if err := sdl.WaitEvent(&event); err != nil {
+			break
+		}
+		if event.Type == sdl.EVENT_QUIT {
+			return false
+		}
+		if event.Type == sdl.EVENT_KEY_DOWN || event.Type == sdl.EVENT_MOUSE_BUTTON_DOWN {
+			break
+		}
+	}
+	return true
+}
+
 const CrossSize = 20
 
 func drawFixationCross(renderer *sdl.Renderer, w, h int, color sdl.Color) {

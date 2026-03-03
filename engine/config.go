@@ -5,30 +5,35 @@ import (
 	"os"
 	"strings"
 
+	"github.com/BurntSushi/toml"
 	"github.com/Zyko0/go-sdl3/sdl"
 )
 
 type Config struct {
-	SubjectID     string
-	CSVFile       string
-	OutputFile    string
-	StimuliDir    string
-	StartSplash   string
-	EndSplash     string
-	FontFile      string
-	DLPDevice     string
-	FontSize      int
-	ScreenWidth   int
-	ScreenHeight  int
-	DisplayIndex  int
-	ScaleFactor   float32
-	TotalDuration uint64
-	UseFixation   bool
-	Fullscreen    bool
-	VSync         bool
-	BGColor       sdl.Color
-	TextColor     sdl.Color
-	FixationColor sdl.Color
+	SubjectID     string    `toml:"subject_id"`
+	CSVFile       string    `toml:"csv_file"`
+	OutputFile    string    `toml:"output_file"`
+	StimuliDir    string    `toml:"stimuli_dir"`
+	StartSplash   string    `toml:"start_splash"`
+	EndSplash     string    `toml:"end_splash"`
+	FontFile      string    `toml:"font"`
+	DLPDevice     string    `toml:"dlp"`
+	FontSize      int       `toml:"font_size"`
+	ScreenWidth   int       `toml:"width"`
+	ScreenHeight  int       `toml:"height"`
+	DisplayIndex  int       `toml:"display"`
+	ScaleFactor   float32   `toml:"scale"`
+	TotalDuration uint64    `toml:"total_duration"`
+	UseFixation   bool      `toml:"use_fixation"`
+	Fullscreen    bool      `toml:"fullscreen"`
+	SkipWait      bool      `toml:"skip_wait"`
+	VSync         bool      `toml:"vsync"`
+	BGColor       sdl.Color `toml:"-"`
+	TextColor     sdl.Color `toml:"-"`
+	FixationColor sdl.Color `toml:"-"`
+	BGColorStr    string    `toml:"bg_color"`
+	TextColorStr  string    `toml:"text_color"`
+	FixColorStr   string    `toml:"fixation_color"`
 }
 
 func ParseColor(s string) sdl.Color {
@@ -43,31 +48,19 @@ func ParseColor(s string) sdl.Color {
 const CacheFile = ".expe3000_cache"
 
 func (cfg *Config) SaveCache() {
+	cfg.BGColorStr = fmt.Sprintf("%d,%d,%d,%d", cfg.BGColor.R, cfg.BGColor.G, cfg.BGColor.B, cfg.BGColor.A)
+	cfg.TextColorStr = fmt.Sprintf("%d,%d,%d,%d", cfg.TextColor.R, cfg.TextColor.G, cfg.TextColor.B, cfg.TextColor.A)
+	cfg.FixColorStr = fmt.Sprintf("%d,%d,%d,%d", cfg.FixationColor.R, cfg.FixationColor.G, cfg.FixationColor.B, cfg.FixationColor.A)
+
 	f, err := os.Create(CacheFile)
 	if err != nil {
 		return
 	}
 	defer f.Close()
 
-	fmt.Fprintf(f, "subject_id=%s\n", cfg.SubjectID)
-	fmt.Fprintf(f, "csv_file=%s\n", cfg.CSVFile)
-	fmt.Fprintf(f, "output_file=%s\n", cfg.OutputFile)
-	fmt.Fprintf(f, "stimuli_dir=%s\n", cfg.StimuliDir)
-	fmt.Fprintf(f, "screen_w=%d\n", cfg.ScreenWidth)
-	fmt.Fprintf(f, "screen_h=%d\n", cfg.ScreenHeight)
-	if cfg.UseFixation {
-		fmt.Fprintf(f, "use_fixation=1\n")
-	} else {
-		fmt.Fprintf(f, "use_fixation=0\n")
+	if err := toml.NewEncoder(f).Encode(cfg); err != nil {
+		fmt.Printf("Error saving cache: %v\n", err)
 	}
-	if cfg.Fullscreen {
-		fmt.Fprintf(f, "fullscreen=1\n")
-	} else {
-		fmt.Fprintf(f, "fullscreen=0\n")
-	}
-	fmt.Fprintf(f, "bg_color=%d,%d,%d,%d\n", cfg.BGColor.R, cfg.BGColor.G, cfg.BGColor.B, cfg.BGColor.A)
-	fmt.Fprintf(f, "text_color=%d,%d,%d,%d\n", cfg.TextColor.R, cfg.TextColor.G, cfg.TextColor.B, cfg.TextColor.A)
-	fmt.Fprintf(f, "fixation_color=%d,%d,%d,%d\n", cfg.FixationColor.R, cfg.FixationColor.G, cfg.FixationColor.B, cfg.FixationColor.A)
 }
 
 func (cfg *Config) LoadCache() {
@@ -76,39 +69,19 @@ func (cfg *Config) LoadCache() {
 		return
 	}
 
-	lines := strings.Split(string(data), "\n")
-	for _, line := range lines {
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		key, val := parts[0], parts[1]
-		val = strings.TrimSpace(val)
+	if _, err := toml.Decode(string(data), cfg); err != nil {
+		fmt.Printf("Error loading cache: %v\n", err)
+		return
+	}
 
-		switch key {
-		case "subject_id":
-			cfg.SubjectID = val
-		case "csv_file":
-			cfg.CSVFile = val
-		case "output_file":
-			cfg.OutputFile = val
-		case "stimuli_dir":
-			cfg.StimuliDir = val
-		case "screen_w":
-			fmt.Sscanf(val, "%d", &cfg.ScreenWidth)
-		case "screen_h":
-			fmt.Sscanf(val, "%d", &cfg.ScreenHeight)
-		case "use_fixation":
-			cfg.UseFixation = (val != "0")
-		case "fullscreen":
-			cfg.Fullscreen = (val != "0")
-		case "bg_color":
-			cfg.BGColor = ParseColor(val)
-		case "text_color":
-			cfg.TextColor = ParseColor(val)
-		case "fixation_color":
-			cfg.FixationColor = ParseColor(val)
-		}
+	if cfg.BGColorStr != "" {
+		cfg.BGColor = ParseColor(cfg.BGColorStr)
+	}
+	if cfg.TextColorStr != "" {
+		cfg.TextColor = ParseColor(cfg.TextColorStr)
+	}
+	if cfg.FixColorStr != "" {
+		cfg.FixationColor = ParseColor(cfg.FixColorStr)
 	}
 }
 
@@ -124,5 +97,6 @@ func DefaultConfig() *Config {
 		BGColor:       sdl.Color{R: 0, G: 0, B: 0, A: 255},
 		TextColor:     sdl.Color{R: 255, G: 255, B: 255, A: 255},
 		FixationColor: sdl.Color{R: 255, G: 255, B: 255, A: 255},
+		SkipWait:      false,
 	}
 }
