@@ -43,6 +43,8 @@ func main() {
 
 	cfg := engine.DefaultConfig()
 	cfg.LoadCache()
+	cfg.OutputFile = "" // Always start with empty results field
+	cfg.SubjectID = ""  // Always start with empty subject ID field
 
 	// Default stimuli dir if empty
 	if cfg.StimuliDir == "" {

@@ -3,6 +3,7 @@ package engine
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -92,14 +93,7 @@ func Run(cfg *Config) string {
 
 	if len(exp.Stimuli) > 0 {
 		lastStim := exp.Stimuli[len(exp.Stimuli)-1]
-		lastDuration := lastStim.DurationMS
-		if lastStim.Type == StimImageStream || lastStim.Type == StimTextStream || lastStim.Type == StimSoundStream {
-			lastDuration = 0
-			for j := 0; j < len(lastStim.FrameDurations); j++ {
-				lastDuration += lastStim.FrameDurations[j] + lastStim.FrameGaps[j]
-			}
-		}
-		cfg.TotalDuration = lastStim.TimestampMS + lastDuration + 500
+		cfg.TotalDuration = lastStim.TimestampMS + lastStim.TotalDuration() + 500
 	}
 
 	cache := NewResourceCache()
@@ -132,6 +126,11 @@ func Run(cfg *Config) string {
 		}
 	}
 
+	subjID := cfg.SubjectID
+	if subjID == "" {
+		subjID = "unknown"
+	}
+
 	hostname, _ := os.Hostname()
 	username := os.Getenv("USER")
 	if username == "" {
@@ -158,7 +157,7 @@ func Run(cfg *Config) string {
 	rendererName, _ := renderer.Name()
 
 	log := &EventLog{
-		SubjectID:         cfg.SubjectID,
+		SubjectID:         subjID,
 		CSVHeader:         exp.Header,
 		Entries:           make([]EventLogEntry, 0, len(exp.Stimuli)*4+100),
 		SDLVersion:        sdlVersionStr,
@@ -196,8 +195,14 @@ func Run(cfg *Config) string {
 
 	log.EndTime = time.Now().Format("2006-01-02 15:04:05.000")
 
+	// Construct output filename based on input CSV basename and subject ID
+	baseName := filepath.Base(cfg.CSVFile)
+	ext := filepath.Ext(baseName)
+	baseName = strings.TrimSuffix(baseName, ext)
+
 	timestamp := time.Now().Format("20060102-150405")
-	outputName := strings.Replace(cfg.OutputFile, ".csv", "_"+timestamp+".csv", 1)
+	outputName := fmt.Sprintf("%s_sub-%s_%s.csv", baseName, subjID, timestamp)
+
 	if err := log.Save(outputName); err != nil {
 		fmt.Printf("Failed to save event log: %v\n", err)
 	} else {

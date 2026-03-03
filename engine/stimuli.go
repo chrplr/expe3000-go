@@ -23,6 +23,17 @@ type Stimulus struct {
 	RawRow         []string
 }
 
+func (s *Stimulus) TotalDuration() uint64 {
+	if s.Type == StimImageStream || s.Type == StimTextStream || s.Type == StimSoundStream {
+		total := uint64(0)
+		for i := 0; i < len(s.FrameDurations); i++ {
+			total += s.FrameDurations[i] + s.FrameGaps[i]
+		}
+		return total
+	}
+	return s.DurationMS
+}
+
 type Experiment struct {
 	Header  []string
 	Stimuli []Stimulus
