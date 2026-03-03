@@ -48,6 +48,7 @@ The core of the system is the `RunExperiment` function in `engine/experiment.go`
 
 ### Stimulus Types
 - **IMAGE / TEXT**: Standard visual stimuli.
+- **BOX**: Multiline text stimulus. The `stimuli` column contains a string that can include `\n` for explicit line breaks. It is rendered as centered multiline text.
 - **SOUND**: Audio stimuli (played via a custom software mixer).
 - **IMAGE_STREAM / TEXT_STREAM**: High-speed rapid serial visual presentation (RSVP). 
     - Multiple assets (image paths or text strings) are specified in the CSV `stimuli` column, separated by the `~` character.

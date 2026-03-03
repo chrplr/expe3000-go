@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// detectDelimiter attempts to find if the file uses semicolons instead of commas as a delimiter.
+// detectDelimiter attempts to find the most likely delimiter in a CSV file.
 func detectDelimiter(path string) (rune, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -20,11 +20,18 @@ func detectDelimiter(path string) (rune, error) {
 	scanner := bufio.NewScanner(file)
 	if scanner.Scan() {
 		line := scanner.Text()
-		commaCount := strings.Count(line, ",")
-		semiCount := strings.Count(line, ";")
-		if semiCount > commaCount {
-			return ';', nil
+		delimiters := []rune{',', ';', '\t', '|'}
+		maxCount := 0
+		bestDelim := ','
+
+		for _, d := range delimiters {
+			count := strings.Count(line, string(d))
+			if count > maxCount {
+				maxCount = count
+				bestDelim = d
+			}
 		}
+		return bestDelim, nil
 	}
 	return ',', nil
 }
@@ -44,8 +51,7 @@ func LoadExperiment(path string) (*Experiment, error) {
 	reader := csv.NewReader(f)
 	reader.Comma = delimiter
 	reader.TrimLeadingSpace = true
-	// To handle lines dynamically without strict lengths, we could set FieldsPerRecord.
-	// We'll leave it as default to let the reader figure it out, but handle errors below.
+	reader.LazyQuotes = true
 
 	records, err := reader.ReadAll()
 	if err != nil {
@@ -131,6 +137,11 @@ func LoadExperiment(path string) (*Experiment, error) {
 			for i, p := range filePaths {
 				filePaths[i] = strings.TrimSpace(p)
 			}
+		case "box":
+			stype = StimBox
+			// Convert literal "\n" to actual newlines
+			content := strings.ReplaceAll(stimRaw, "\\n", "\n")
+			filePaths = []string{content}
 		default:
 			return nil, fmt.Errorf("line %d: unknown stimulus type: %s", i+1, record[idxType])
 		}

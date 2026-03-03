@@ -9,6 +9,7 @@ const (
 	StimImageStream
 	StimTextStream
 	StimSoundStream
+	StimBox
 	StimEnd
 )
 

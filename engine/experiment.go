@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"encoding/csv"
 	"expe3000/internal/version"
 	"os"
 	"runtime/debug"
@@ -52,15 +51,36 @@ func (l *EventLog) Log(intended, actual uint64, stype, label string, stimulusRow
 	})
 }
 
+func isNumeric(s string) bool {
+	if _, err := strconv.ParseFloat(s, 64); err == nil {
+		return true
+	}
+	return false
+}
+
+func writeRow(f *os.File, row []string) {
+	for i, field := range row {
+		if i > 0 {
+			f.WriteString("\t")
+		}
+		if isNumeric(field) {
+			f.WriteString(field)
+		} else {
+			f.WriteString("\"")
+			// Escape internal quotes
+			f.WriteString(strings.ReplaceAll(field, "\"", "\"\""))
+			f.WriteString("\"")
+		}
+	}
+	f.WriteString("\n")
+}
+
 func (l *EventLog) Save(path string) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-
-	w := csv.NewWriter(f)
-	defer w.Flush()
 
 	// Write metadata
 	metadata := [][]string{
@@ -97,13 +117,13 @@ func (l *EventLog) Save(path string) error {
 	metadata = append(metadata, []string{"# Command Line: " + l.CommandLine})
 
 	for _, m := range metadata {
-		w.Write(m)
+		writeRow(f, m)
 	}
 
 	// Write data header
 	outputHdr := []string{"subject_id", "intended_ms", "actual_ms", "type", "label"}
 	outputHdr = append(outputHdr, l.CSVHeader...)
-	w.Write(outputHdr)
+	writeRow(f, outputHdr)
 
 	// Write data entries
 	for _, e := range l.Entries {
@@ -121,7 +141,7 @@ func (l *EventLog) Save(path string) error {
 				row = append(row, "")
 			}
 		}
-		w.Write(row)
+		writeRow(f, row)
 	}
 	return nil
 }
@@ -291,7 +311,7 @@ func (s *experimentState) update() (bool, int) {
 		onsetMS := stim.TimestampMS
 
 		if (s.ctMS + s.laMS) >= onsetMS {
-			if (stim.Type == StimImage || stim.Type == StimText || stim.Type == StimImageStream || stim.Type == StimTextStream) && len(s.resources[s.csIndex].Textures) > 0 {
+			if (stim.Type == StimImage || stim.Type == StimText || stim.Type == StimBox || stim.Type == StimImageStream || stim.Type == StimTextStream) && len(s.resources[s.csIndex].Textures) > 0 {
 				s.activeVisual = s.csIndex
 				trig = true
 				tidx = s.csIndex
@@ -305,7 +325,7 @@ func (s *experimentState) update() (bool, int) {
 					if stim.Type == StimImage || stim.Type == StimImageStream {
 						s.dlp.Set("1")
 					} else {
-						s.dlp.Set("3")
+						s.dlp.Set("3") // TEXT and BOX on line 3
 					}
 				}
 			} else if stim.Type == StimSound && len(s.resources[s.csIndex].Sounds) > 0 {
@@ -362,6 +382,8 @@ func (s *experimentState) update() (bool, int) {
 		switch stim.Type {
 		case StimText:
 			stype = "TEXT_OFFSET"
+		case StimBox:
+			stype = "BOX_OFFSET"
 		case StimImageStream:
 			stype = "IMAGE_STREAM_OFFSET"
 		case StimTextStream:
@@ -473,6 +495,8 @@ func RunExperiment(cfg *Config, exp *Experiment, resources []Resource, renderer 
 			switch stim.Type {
 			case StimText:
 				stype = "TEXT_ONSET"
+			case StimBox:
+				stype = "BOX_ONSET"
 			case StimImageStream:
 				stype = "IMAGE_STREAM_ONSET"
 			case StimTextStream:

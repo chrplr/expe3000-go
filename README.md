@@ -121,7 +121,9 @@ onset_time,duration,type,cond,stimuli
 4000,500,IMAGE,Body,body03.png
 5000,1,SOUND,Animal,sound02.wav
 ```
-- **Types**: `IMAGE`, `SOUND`, `TEXT`, `IMAGE_STREAM`, `TEXT_STREAM`, `SOUND_STREAM`.
+- **Types**: `IMAGE`, `SOUND`, `TEXT`, `BOX`, `IMAGE_STREAM`, `TEXT_STREAM`, `SOUND_STREAM`.
+- **BOX**: Displays multiline text centered on the screen. Use `\n` for line breaks within the `stimuli` string.
+  - *Example*: `5000,2000,BOX,Inst,Please press\nany key\nto continue`
 - **IMAGE_STREAM**: Displays a sequence of images in rapid succession. The `stimuli` column should contain image filenames separated by `~`. Each image is displayed for the duration specified in the `duration` column.
   - *Example*: `2000,100,IMAGE_STREAM,Face,face01.png~face02.png~face12.png` (total duration 300ms)
 - **TEXT_STREAM**: Displays a sequence of text strings in rapid succession. The `stimuli` column should contain strings separated by `~`. Each string is displayed for the duration specified in the `duration` column.

@@ -64,14 +64,14 @@ func ValidateExperiment(exp *Experiment, stimuliDir string) []error {
 					errors = append(errors, fmt.Errorf("stimulus %d (at %dms): expected file, got directory: %s", i+1, stim.TimestampMS, expectedPath))
 				}
 			}
-		} else if stim.Type == StimText || stim.Type == StimTextStream {
+		} else if stim.Type == StimText || stim.Type == StimTextStream || stim.Type == StimBox {
 			if len(stim.FilePaths) == 0 || (len(stim.FilePaths) == 1 && stim.FilePaths[0] == "") {
 				errors = append(errors, fmt.Errorf("stimulus %d (at %dms): empty text string", i+1, stim.TimestampMS))
 			}
 		}
 
-		// Overlap checks for visual stimuli (Image, Text, Streams)
-		isVisual := (stim.Type == StimImage || stim.Type == StimText || stim.Type == StimImageStream || stim.Type == StimTextStream)
+		// Overlap checks for visual stimuli (Image, Text, Box, Streams)
+		isVisual := (stim.Type == StimImage || stim.Type == StimText || stim.Type == StimBox || stim.Type == StimImageStream || stim.Type == StimTextStream)
 		if isVisual {
 			var duration uint64
 			if stim.Type == StimImageStream || stim.Type == StimTextStream {

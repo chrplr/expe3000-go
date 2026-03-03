@@ -157,6 +157,28 @@ func (c *ResourceCache) Load(renderer *sdl.Renderer, exp *Experiment, font *ttf.
 				} else {
 					return nil, fmt.Errorf("cannot render text stimulus (no font loaded)")
 				}
+			case StimBox:
+				if font != nil {
+					// Use RenderTextBlendedWrapped for multiline support
+					surf, err := font.RenderTextBlendedWrapped(path, textColor, 0) // 0 for no wrap width limit (use explicit \n)
+					if err != nil {
+						return nil, fmt.Errorf("failed to render multiline box '%s': %v", path, err)
+					}
+					if surf == nil {
+						return nil, fmt.Errorf("failed to render multiline box '%s': null surface", path)
+					}
+					tex, err := renderer.CreateTextureFromSurface(surf)
+					if err != nil {
+						surf.Destroy()
+						return nil, fmt.Errorf("failed to create texture for box '%s': %v", path, err)
+					}
+					entry.Texture = tex
+					entry.W = float32(surf.W)
+					entry.H = float32(surf.H)
+					surf.Destroy()
+				} else {
+					return nil, fmt.Errorf("cannot render box stimulus (no font loaded)")
+				}
 			}
 
 			c.entries[key] = entry
