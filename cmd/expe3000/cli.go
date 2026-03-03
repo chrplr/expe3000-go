@@ -4,7 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"runtime"
+	"syscall"
 
 	"expe3000/engine"
 	"expe3000/internal/version"
@@ -36,6 +38,7 @@ func main() {
 	noVSync := flag.Bool("no-vsync", false, "Disable VSync")
 	noFixation := flag.Bool("no-fixation", false, "Disable fixation cross")
 	fullscreen := flag.Bool("fullscreen", false, "Enable fullscreen")
+	vrr := flag.Bool("vrr", false, "Enable Variable Refresh Rate mode (disables VSync)")
 	bgColorStr := flag.String("bg-color", "0,0,0,255", "Background color (R,G,B,A)")
 	textColorStr := flag.String("text-color", "255,255,255,255", "Text color (R,G,B,A)")
 	fixColorStr := flag.String("fixation-color", "255,255,255,255", "Fixation color (R,G,B,A)")
@@ -47,6 +50,15 @@ func main() {
 		fmt.Print(version.Info())
 		os.Exit(0)
 	}
+
+	// Handle Ctrl-C (SIGINT)
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		fmt.Println("\nReceived interrupt, exiting...")
+		os.Exit(0)
+	}()
 
 	defer binsdl.Load().Unload()
 	defer binimg.Load().Unload()
@@ -71,6 +83,10 @@ func main() {
 	cfg.DisplayIndex = *displayIdx
 	cfg.ScaleFactor = float32(*scaleFactor)
 	cfg.VSync = !*noVSync
+	if *vrr {
+		cfg.VSync = false
+		cfg.VRR = true
+	}
 	cfg.UseFixation = !*noFixation
 	cfg.Fullscreen = *fullscreen
 	cfg.BGColor = engine.ParseColor(*bgColorStr)

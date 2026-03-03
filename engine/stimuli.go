@@ -14,11 +14,13 @@ const (
 )
 
 type Stimulus struct {
-	TimestampMS uint64
-	DurationMS  uint64
-	Type        StimType
-	FilePaths   []string
-	RawRow      []string
+	TimestampMS    uint64
+	DurationMS     uint64 // Default duration for each frame or the total duration
+	Type           StimType
+	FilePaths      []string
+	FrameDurations []uint64 // Per-frame durations (optional)
+	FrameGaps      []uint64 // Per-frame gaps (optional)
+	RawRow         []string
 }
 
 type Experiment struct {

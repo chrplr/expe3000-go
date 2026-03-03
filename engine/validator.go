@@ -75,7 +75,9 @@ func ValidateExperiment(exp *Experiment, stimuliDir string) []error {
 		if isVisual {
 			var duration uint64
 			if stim.Type == StimImageStream || stim.Type == StimTextStream {
-				duration = stim.DurationMS * uint64(len(stim.FilePaths))
+				for j := 0; j < len(stim.FrameDurations); j++ {
+					duration += stim.FrameDurations[j] + stim.FrameGaps[j]
+				}
 			} else {
 				duration = stim.DurationMS
 			}

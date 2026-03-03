@@ -2,11 +2,31 @@ package engine
 
 import (
 	"fmt"
+	"os/exec"
+	"runtime"
 	"strconv"
 
 	"github.com/Zyko0/go-sdl3/sdl"
 	"github.com/Zyko0/go-sdl3/ttf"
 )
+
+func openURL(url string) error {
+	var cmd string
+	var args []string
+
+	switch runtime.GOOS {
+	case "windows":
+		cmd = "rundll32"
+		args = []string{"url.dll,FileProtocolHandler", url}
+	case "darwin":
+		cmd = "open"
+		args = []string{url}
+	default: // linux, bsd, etc.
+		cmd = "xdg-open"
+		args = []string{url}
+	}
+	return exec.Command(cmd, args...).Start()
+}
 
 func RunGuiSetup(cfg *Config) bool {
 	if err := sdl.Init(sdl.INIT_VIDEO | sdl.INIT_EVENTS); err != nil {
@@ -44,7 +64,6 @@ func RunGuiSetup(cfg *Config) bool {
 	displayStr := strconv.Itoa(cfg.DisplayIndex)
 	fontSizeStr := strconv.Itoa(cfg.FontSize)
 
-	setupDone := false
 	focusBox := -1 // 0: subject, 1: csv, 2: stimuliDir, 3: output, 4: splash, 5: font, 6: dlp, 7: display, 8: fontsize
 
 	type ResOption struct {
@@ -72,13 +91,13 @@ func RunGuiSetup(cfg *Config) bool {
 
 	// Layout Constants
 	const (
-		C1X           = 50
-		C2X           = 420
-		BoxW          = 320
+		C1X           = 30
+		C2X           = 450
+		BoxW          = 350
 		BoxH          = 30
 		RowSpacing    = 60
 		LabelOffset   = 25
-		BrowseX       = 380
+		BrowseX       = 390
 		BrowseW       = 35
 		ResStartYS    = 240
 		CheckSize     = 20
@@ -87,7 +106,7 @@ func RunGuiSetup(cfg *Config) bool {
 		StartBtnY     = 720
 	)
 
-	for !setupDone {
+	for {
 		var e sdl.Event
 		for sdl.PollEvent(&e) {
 			switch e.Type {
@@ -115,6 +134,11 @@ func RunGuiSetup(cfg *Config) bool {
 							break
 						}
 					}
+				}
+
+				// Help button
+				if mx >= 20 && mx <= 100 && my >= StartBtnY && my <= StartBtnY+40 {
+					openURL("https://chrplr.github.io/expe3000-go")
 				}
 
 				// Browse buttons in Col 1
@@ -184,7 +208,11 @@ func RunGuiSetup(cfg *Config) bool {
 				if mx >= C2X && mx <= C2X+200 && my >= OptionsY+2*CheckSpacing && my <= OptionsY+2*CheckSpacing+CheckSize {
 					cfg.SkipWait = !cfg.SkipWait
 				}
+				if mx >= C2X && mx <= C2X+200 && my >= OptionsY+3*CheckSpacing && my <= OptionsY+3*CheckSpacing+CheckSize {
+					cfg.VRR = !cfg.VRR
+				}
 
+				// Start button
 				if mx >= 350 && mx <= 450 && my >= StartBtnY && my <= StartBtnY+40 {
 					if cfg.CSVFile != "" {
 						cfg.ScreenWidth = resOptions[selectedRes].W
@@ -196,8 +224,13 @@ func RunGuiSetup(cfg *Config) bool {
 							cfg.FontSize = v
 						}
 						cfg.SaveCache()
-						setupDone = true
+						return true
 					}
+				}
+
+				// Quit button
+				if mx >= 690 && mx <= 790 && my >= StartBtnY && my <= StartBtnY+40 {
+					return false
 				}
 			case sdl.EVENT_TEXT_INPUT:
 				ti := e.TextInputEvent()
@@ -282,8 +315,8 @@ func RunGuiSetup(cfg *Config) bool {
 			if text != "" {
 				// Only show end of path if it's too long
 				displayPath := text
-				if len(text) > 35 {
-					displayPath = "..." + text[len(text)-32:]
+				if len(text) > 40 {
+					displayPath = "..." + text[len(text)-37:]
 				}
 				surf, err := guiFont.RenderTextBlended(displayPath, black)
 				if err == nil && surf != nil {
@@ -465,11 +498,48 @@ func RunGuiSetup(cfg *Config) bool {
 			surfSkip.Destroy()
 		}
 
+		vry := float32(OptionsY + 3*CheckSpacing)
+		renderer.SetDrawColor(255, 255, 255, 255)
+		vrrCheck := sdl.FRect{X: C2X, Y: vry, W: CheckSize, H: CheckSize}
+		renderer.RenderFillRect(&vrrCheck)
+		renderer.SetDrawColor(0, 0, 0, 255)
+		renderer.RenderRect(&vrrCheck)
+		if cfg.VRR {
+			mark := sdl.FRect{X: C2X + 4, Y: vry + 4, W: CheckSize - 8, H: CheckSize - 8}
+			renderer.SetDrawColor(0, 150, 0, 255)
+			renderer.RenderFillRect(&mark)
+		}
+		surfVRR, err := guiFont.RenderTextBlended("Variable Refresh Rate (VRR)", black)
+		if err == nil && surfVRR != nil {
+			tex, err := renderer.CreateTextureFromSurface(surfVRR)
+			if err == nil {
+				r := sdl.FRect{X: C2X + 30, Y: vry, W: float32(surfVRR.W), H: float32(surfVRR.H)}
+				renderer.RenderTexture(tex, nil, &r)
+				tex.Destroy()
+			}
+			surfVRR.Destroy()
+		}
+
+		// Help button
+		renderer.SetDrawColor(0, 120, 255, 255)
+		helpBtn := sdl.FRect{X: 20, Y: StartBtnY, W: 80, H: 40}
+		renderer.RenderFillRect(&helpBtn)
+		white := sdl.Color{R: 255, G: 255, B: 255, A: 255}
+		surfHelp, err := guiFont.RenderTextBlended("HELP", white)
+		if err == nil && surfHelp != nil {
+			tex, err := renderer.CreateTextureFromSurface(surfHelp)
+			if err == nil {
+				r := sdl.FRect{X: 20 + (80-float32(surfHelp.W))/2, Y: StartBtnY + (40-float32(surfHelp.H))/2, W: float32(surfHelp.W), H: float32(surfHelp.H)}
+				renderer.RenderTexture(tex, nil, &r)
+				tex.Destroy()
+			}
+			surfHelp.Destroy()
+		}
+
 		// Start button
 		renderer.SetDrawColor(0, 150, 0, 255)
 		startBtn := sdl.FRect{X: 350, Y: StartBtnY, W: 100, H: 40}
 		renderer.RenderFillRect(&startBtn)
-		white := sdl.Color{R: 255, G: 255, B: 255, A: 255}
 		surfSt, err := guiFont.RenderTextBlended("START", white)
 		if err == nil && surfSt != nil {
 			tex, err := renderer.CreateTextureFromSurface(surfSt)
@@ -481,9 +551,24 @@ func RunGuiSetup(cfg *Config) bool {
 			surfSt.Destroy()
 		}
 
+		// Quit button
+		renderer.SetDrawColor(180, 0, 0, 255)
+		quitBtn := sdl.FRect{X: 690, Y: StartBtnY, W: 100, H: 40}
+		renderer.RenderFillRect(&quitBtn)
+		surfQt, err := guiFont.RenderTextBlended("QUIT", white)
+		if err == nil && surfQt != nil {
+			tex, err := renderer.CreateTextureFromSurface(surfQt)
+			if err == nil {
+				r := sdl.FRect{X: 690 + (100-float32(surfQt.W))/2, Y: StartBtnY + (40-float32(surfQt.H))/2, W: float32(surfQt.W), H: float32(surfQt.H)}
+				renderer.RenderTexture(tex, nil, &r)
+				tex.Destroy()
+			}
+			surfQt.Destroy()
+		}
+
 		renderer.Present()
 		sdl.Delay(10)
 	}
 
-	return true
+	return false
 }

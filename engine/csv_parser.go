@@ -36,7 +36,33 @@ func detectDelimiter(path string) (rune, error) {
 	return ',', nil
 }
 
+// parseStreamString parses strings like "image.png:200:50" or "image.png:200" or just "image.png"
+func parseStreamString(s string, defaultDuration uint64) (string, uint64, uint64) {
+	parts := strings.Split(s, ":")
+	path := strings.TrimSpace(parts[0])
+	duration := defaultDuration
+	gap := uint64(0)
+
+	if len(parts) >= 2 {
+		d, err := strconv.ParseUint(strings.TrimSpace(parts[1]), 10, 64)
+		if err == nil {
+			duration = d
+		}
+	}
+	if len(parts) >= 3 {
+		g, err := strconv.ParseUint(strings.TrimSpace(parts[2]), 10, 64)
+		if err == nil {
+			gap = g
+		}
+	}
+	return path, duration, gap
+}
+
 func LoadExperiment(path string) (*Experiment, error) {
+	if _, err := os.Stat(path); err != nil {
+		return nil, err
+	}
+
 	delimiter, err := detectDelimiter(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to detect delimiter: %v", err)
@@ -107,6 +133,8 @@ func LoadExperiment(path string) (*Experiment, error) {
 
 		var stype StimType
 		var filePaths []string
+		var frameDurations []uint64
+		var frameGaps []uint64
 		stimRaw := strings.TrimSpace(record[idxStimuli])
 
 		switch strings.ToLower(strings.TrimSpace(record[idxType])) {
@@ -121,21 +149,30 @@ func LoadExperiment(path string) (*Experiment, error) {
 			filePaths = []string{stimRaw}
 		case "stream", "image_stream":
 			stype = StimImageStream
-			filePaths = strings.Split(stimRaw, "~")
-			for i, p := range filePaths {
-				filePaths[i] = strings.TrimSpace(p)
+			rawPaths := strings.Split(stimRaw, "~")
+			for _, p := range rawPaths {
+				path, d, g := parseStreamString(p, duration)
+				filePaths = append(filePaths, path)
+				frameDurations = append(frameDurations, d)
+				frameGaps = append(frameGaps, g)
 			}
 		case "text_stream":
 			stype = StimTextStream
-			filePaths = strings.Split(stimRaw, "~")
-			for i, p := range filePaths {
-				filePaths[i] = strings.TrimSpace(p)
+			rawPaths := strings.Split(stimRaw, "~")
+			for _, p := range rawPaths {
+				path, d, g := parseStreamString(p, duration)
+				filePaths = append(filePaths, path)
+				frameDurations = append(frameDurations, d)
+				frameGaps = append(frameGaps, g)
 			}
 		case "sound_stream":
 			stype = StimSoundStream
-			filePaths = strings.Split(stimRaw, "~")
-			for i, p := range filePaths {
-				filePaths[i] = strings.TrimSpace(p)
+			rawPaths := strings.Split(stimRaw, "~")
+			for _, p := range rawPaths {
+				path, d, g := parseStreamString(p, duration)
+				filePaths = append(filePaths, path)
+				frameDurations = append(frameDurations, d)
+				frameGaps = append(frameGaps, g)
 			}
 		case "box":
 			stype = StimBox
@@ -147,11 +184,13 @@ func LoadExperiment(path string) (*Experiment, error) {
 		}
 
 		stimuli = append(stimuli, Stimulus{
-			TimestampMS: timestamp,
-			DurationMS:  duration,
-			Type:        stype,
-			FilePaths:   filePaths,
-			RawRow:      record,
+			TimestampMS:    timestamp,
+			DurationMS:     duration,
+			Type:           stype,
+			FilePaths:      filePaths,
+			FrameDurations: frameDurations,
+			FrameGaps:      frameGaps,
+			RawRow:         record,
 		})
 	}
 

@@ -28,6 +28,7 @@ type Config struct {
 	Fullscreen    bool      `toml:"fullscreen"`
 	SkipWait      bool      `toml:"skip_wait"`
 	VSync         bool      `toml:"vsync"`
+	VRR           bool      `toml:"vrr"`
 	BGColor       sdl.Color `toml:"-"`
 	TextColor     sdl.Color `toml:"-"`
 	FixationColor sdl.Color `toml:"-"`

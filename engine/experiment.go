@@ -316,7 +316,11 @@ func (s *experimentState) update() (bool, int) {
 				trig = true
 				tidx = s.csIndex
 				if stim.Type == StimImageStream || stim.Type == StimTextStream {
-					s.visualEndMS = s.ctMS + (stim.DurationMS * uint64(len(s.resources[s.csIndex].Textures)))
+					totalDur := uint64(0)
+					for i := 0; i < len(stim.FilePaths); i++ {
+						totalDur += stim.FrameDurations[i] + stim.FrameGaps[i]
+					}
+					s.visualEndMS = s.ctMS + totalDur
 				} else {
 					s.visualEndMS = s.ctMS + stim.DurationMS
 				}
@@ -345,7 +349,7 @@ func (s *experimentState) update() (bool, int) {
 						s.pulse2OffMS = s.ctMS + 5
 					}
 				}
-				s.csvetSoundStream = s.ctMS + stim.DurationMS
+				s.csvetSoundStream = s.ctMS + stim.FrameDurations[0] + stim.FrameGaps[0]
 			}
 			s.csIndex++
 		}
@@ -356,14 +360,18 @@ func (s *experimentState) update() (bool, int) {
 		s.csidxSoundStream++
 		stim := &s.exp.Stimuli[s.csIndex-1]
 		if s.mixer.Play(&s.resources[s.csIndex-1].Sounds[s.csidxSoundStream]) {
-			intendedMS := stim.TimestampMS + (uint64(s.csidxSoundStream) * stim.DurationMS)
+			// Calculate intended MS based on cumulative previous frame durations and gaps
+			intendedMS := stim.TimestampMS
+			for i := 0; i < s.csidxSoundStream; i++ {
+				intendedMS += stim.FrameDurations[i] + stim.FrameGaps[i]
+			}
 			s.log.Log(intendedMS, s.ctMS, "SOUND_STREAM_FRAME", stim.FilePaths[s.csidxSoundStream], stim.RawRow)
 			if s.dlp != nil {
 				s.dlp.Set("2")
 				s.pulse2OffMS = s.ctMS + 5
 			}
 		}
-		s.csvetSoundStream = s.ctMS + stim.DurationMS
+		s.csvetSoundStream = s.ctMS + stim.FrameDurations[s.csidxSoundStream] + stim.FrameGaps[s.csidxSoundStream]
 		if s.csidxSoundStream == len(s.resources[s.csIndex-1].Sounds)-1 {
 			s.csidxSoundStream = -1
 		}
@@ -372,11 +380,15 @@ func (s *experimentState) update() (bool, int) {
 	// Handle Visual Offsets
 	if s.activeVisual != -1 && s.ctMS >= s.visualEndMS {
 		stim := &s.exp.Stimuli[s.activeVisual]
-		durationMS := stim.DurationMS
+		totalDuration := uint64(0)
 		if stim.Type == StimImageStream || stim.Type == StimTextStream {
-			durationMS = stim.DurationMS * uint64(len(s.resources[s.activeVisual].Textures))
+			for i := 0; i < len(stim.FilePaths); i++ {
+				totalDuration += stim.FrameDurations[i] + stim.FrameGaps[i]
+			}
+		} else {
+			totalDuration = stim.DurationMS
 		}
-		intendedOffMS := stim.TimestampMS + durationMS
+		intendedOffMS := stim.TimestampMS + totalDuration
 		label := strings.Join(stim.FilePaths, "~")
 		stype := "IMAGE_OFFSET"
 		switch stim.Type {
@@ -418,29 +430,51 @@ func (s *experimentState) render() {
 		stim := &s.exp.Stimuli[s.activeVisual]
 
 		frameIdx := 0
+		showBlank := false
 		if stim.Type == StimImageStream || stim.Type == StimTextStream {
-			totalDuration := stim.DurationMS * uint64(len(r.Textures))
+			totalDuration := uint64(0)
+			for i := 0; i < len(stim.FilePaths); i++ {
+				totalDuration += stim.FrameDurations[i] + stim.FrameGaps[i]
+			}
 			elapsed := s.ctMS - (s.visualEndMS - totalDuration)
-			frameIdx = int(elapsed / stim.DurationMS)
-			if frameIdx >= len(r.Textures) {
+			
+			// Find which frame we are in
+			cumul := uint64(0)
+			frameIdx = -1
+			for i := 0; i < len(stim.FrameDurations); i++ {
+				if elapsed < cumul + stim.FrameDurations[i] {
+					frameIdx = i
+					showBlank = false
+					break
+				}
+				cumul += stim.FrameDurations[i]
+				if elapsed < cumul + stim.FrameGaps[i] {
+					frameIdx = i
+					showBlank = true
+					break
+				}
+				cumul += stim.FrameGaps[i]
+			}
+			if frameIdx == -1 {
 				frameIdx = len(r.Textures) - 1
 			}
-			if frameIdx < 0 {
-				frameIdx = 0
+		}
+
+		if !showBlank {
+			tex := r.Textures[frameIdx]
+			w := r.W[frameIdx]
+			h := r.H[frameIdx]
+
+			dr := sdl.FRect{
+				X: (float32(s.cfg.ScreenWidth) - (w * s.cfg.ScaleFactor)) / 2.0,
+				Y: (float32(s.cfg.ScreenHeight) - (h * s.cfg.ScaleFactor)) / 2.0,
+				W: w * s.cfg.ScaleFactor,
+				H: h * s.cfg.ScaleFactor,
 			}
+			s.renderer.RenderTexture(tex, nil, &dr)
+		} else if s.cfg.UseFixation {
+			drawFixationCross(s.renderer, s.cfg.ScreenWidth, s.cfg.ScreenHeight, s.cfg.FixationColor)
 		}
-
-		tex := r.Textures[frameIdx]
-		w := r.W[frameIdx]
-		h := r.H[frameIdx]
-
-		dr := sdl.FRect{
-			X: (float32(s.cfg.ScreenWidth) - (w * s.cfg.ScaleFactor)) / 2.0,
-			Y: (float32(s.cfg.ScreenHeight) - (h * s.cfg.ScaleFactor)) / 2.0,
-			W: w * s.cfg.ScaleFactor,
-			H: h * s.cfg.ScaleFactor,
-		}
-		s.renderer.RenderTexture(tex, nil, &dr)
 	} else if s.cfg.UseFixation {
 		drawFixationCross(s.renderer, s.cfg.ScreenWidth, s.cfg.ScreenHeight, s.cfg.FixationColor)
 	}
@@ -460,6 +494,11 @@ func RunExperiment(cfg *Config, exp *Experiment, resources []Resource, renderer 
 	}
 	fdMS := uint64(1000.0 / rr)
 
+	laMS := fdMS / 2
+	if cfg.VRR {
+		laMS = 0 // In VRR we want to hit the timestamp exactly
+	}
+
 	state := &experimentState{
 		cfg:              cfg,
 		exp:              exp,
@@ -473,15 +512,32 @@ func RunExperiment(cfg *Config, exp *Experiment, resources []Resource, renderer 
 		activeVisual:     -1,
 		csidxSoundStream: -1,
 		run:              true,
-		laMS:             fdMS / 2,
+		laMS:             laMS,
 	}
 
+	if cfg.VSync {
+		// Sync start with a VBlank
+		renderer.SetDrawColor(cfg.BGColor.R, cfg.BGColor.G, cfg.BGColor.B, cfg.BGColor.A)
+		renderer.Clear()
+		renderer.Present()
+	}
 	state.stMS = sdl.Ticks()
 
 	for state.run {
 		state.handleEvents()
 		if !state.run {
 			break
+		}
+
+		// In VRR mode, if we are close to an onset, busy-wait to hit it exactly
+		if cfg.VRR && state.csIndex < len(state.exp.Stimuli) {
+			onsetMS := state.exp.Stimuli[state.csIndex].TimestampMS
+			ctMS := sdl.Ticks() - state.stMS
+			if ctMS < onsetMS && onsetMS-ctMS <= 2 { // If within 2ms, busy-wait
+				for sdl.Ticks()-state.stMS < onsetMS {
+					// busy wait
+				}
+			}
 		}
 
 		trig, tidx := state.update()
@@ -504,14 +560,18 @@ func RunExperiment(cfg *Config, exp *Experiment, resources []Resource, renderer 
 			}
 			state.log.Log(stim.TimestampMS, ot, stype, label, stim.RawRow)
 
+			totalDur := uint64(0)
 			if stim.Type == StimImageStream || stim.Type == StimTextStream {
-				state.visualEndMS = ot + (stim.DurationMS * uint64(len(state.resources[tidx].Textures)))
+				for j := 0; j < len(stim.FrameDurations); j++ {
+					totalDur += stim.FrameDurations[j] + stim.FrameGaps[j]
+				}
 			} else {
-				state.visualEndMS = ot + stim.DurationMS
+				totalDur = stim.DurationMS
 			}
+			state.visualEndMS = ot + totalDur
 		}
 
-		if !cfg.VSync {
+		if !cfg.VSync && !cfg.VRR {
 			sdl.Delay(1)
 		}
 	}

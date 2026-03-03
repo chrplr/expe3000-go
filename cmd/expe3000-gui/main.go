@@ -4,7 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"runtime"
+	"syscall"
 
 	"expe3000/engine"
 	"expe3000/internal/version"
@@ -26,6 +28,15 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Handle Ctrl-C (SIGINT)
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		fmt.Println("\nReceived interrupt, exiting...")
+		os.Exit(0)
+	}()
+
 	defer binsdl.Load().Unload()
 	defer binimg.Load().Unload()
 	defer binttf.Load().Unload()
@@ -40,7 +51,14 @@ func main() {
 		}
 	}
 
-	if engine.RunGuiSetup(cfg) {
-		engine.Run(cfg)
+	for {
+		if engine.RunGuiSetup(cfg) {
+			savedFile := engine.Run(cfg)
+			if savedFile != "" {
+				cfg.OutputFile = savedFile
+			}
+		} else {
+			break
+		}
 	}
 }

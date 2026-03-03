@@ -4,9 +4,8 @@
 
 A multimedia stimulus delivery system designed for experimental psychology and neuroscience tasks requiring accurate timing and low-latency audio.
 
-This is a port of the original `expe3000` (C version) to Go, using the [go-sdl3](https://github.com/Zyko0/go-sdl3) bindings.
-
-
+This [software](http://github.com/chrplr/expe3000-go) is a port of [audiovis](https://https://chrplr.github.io/audiovis/) to Go, using the [go-sdl3](https://github.com/Zyko0/go-sdl3) bindings. A [C version of expe3000](http://https://github.com/chrplr/expe3000) also exists, with less functionnalities, which might provided better slightly better timing control in case Go is not good enough for you.
+ 
 ## Overview
 
 Stimuli are presented according to a fixed, predefined schedule. Although keypress events are saved with a timestamp, the behavior of the program cannot be modified in real-time (e.g., immediate feedback). There is no notion of "trial." This approach is suitable for fMRI/MEG/EEG experiments with rigid stimulus presentation schedules.
@@ -114,27 +113,28 @@ The input CSV file must include at least these four columns in its header: `onse
 
 **Example (`experiment.csv`):**
 ```csv
-onset_time,duration,type,cond,stimuli
-1000,500,IMAGE,Mu,Mu04.png
-2000,500,IMAGE,Face,face01.png
-3000,500,TEXT,Greeting,Hello !
-4000,500,IMAGE,Body,body03.png
-5000,1,SOUND,Animal,sound02.wav
+onset_time,duration,type,stimuli
+1000,500,IMAGE,body01.png
+2000,300,IMAGE_STREAM,face01.png:200:100~face02.png:200:100~face12.png:200:100
+3000,500,TEXT,Hello !
+4000,2000,BOX,Please press\nany key
+7000,1,SOUND,sound02.wav
 ```
 - **Types**: `IMAGE`, `SOUND`, `TEXT`, `BOX`, `IMAGE_STREAM`, `TEXT_STREAM`, `SOUND_STREAM`.
-- **BOX**: Displays multiline text centered on the screen. Use `\n` for line breaks within the `stimuli` string.
-  - *Example*: `5000,2000,BOX,Inst,Please press\nany key\nto continue`
-- **IMAGE_STREAM**: Displays a sequence of images in rapid succession. The `stimuli` column should contain image filenames separated by `~`. Each image is displayed for the duration specified in the `duration` column.
-  - *Example*: `2000,100,IMAGE_STREAM,Face,face01.png~face02.png~face12.png` (total duration 300ms)
-- **TEXT_STREAM**: Displays a sequence of text strings in rapid succession. The `stimuli` column should contain strings separated by `~`. Each string is displayed for the duration specified in the `duration` column.
-  - *Example*: `4000,150,TEXT_STREAM,Greeting,Hello~World~Rapid~Stream` (total duration 600ms)
-- **SOUND_STREAM**: Plays a sequence of sound files. The `stimuli` column should contain sound filenames separated by `~`. The `duration` column specifies the **Stimulus Onset Asynchrony (SOA)**, which is the time between the start of each sound.
-  - *Example*: `7000,200,SOUND_STREAM,Tones,sound01.wav~sound02.wav~sound01.wav` (starts a new sound every 200ms)
+- **BOX**: Displays multiline text centered on the screen. Use `\n` for literal line breaks within the `stimuli` string.
+- **IMAGE_STREAM**: Displays a sequence of images in rapid succession. 
+    - The `stimuli` column contains filenames separated by `~`.
+    - **Timing (Optional)**: Each item can use the format `filename:duration:gap`.
+        - `duration`: Time in ms to show the image.
+        - `gap`: Time in ms to show a blank screen (or fixation cross) after the image.
+    - If timing is omitted, the value from the `duration` column is used as the frame duration with a 0ms gap.
+- **TEXT_STREAM**: Displays a sequence of text strings in rapid succession. Supports the same `:duration:gap` timing format.
+- **SOUND_STREAM**: Plays a sequence of sound files. Supports the same `:duration:gap` format, where `duration` is the SOA (Stimulus Onset Asynchrony).
 - **Note**: For `SOUND`, use `1` (or any small value) as they play until finished, but the duration column is still required.
 - **Escape**: Press **Escape** at any time to interrupt the experiment.
 
 
-Note: Under Linux, you can minimize video latencies by runining the cli version of expe3000  from a linux console (e.g. by pressing Ctrl-Alt-F3) and after stopping the graphics server with `systemctl stop gdm`. Thus, you will bypass x11 or wayland composers and use the Direct Rendering Manager kernel module. 
+Note: Under Linux, you can minimize video latencies by running the cli version of expe3000  from a linux console (e.g. by pressing Ctrl-Alt-F3) and after stopping the graphics server with `systemctl stop gdm`. Thus, you will bypass x11 or wayland composers and use the Direct Rendering Manager kernel module. 
 
 
 ## License & Credits

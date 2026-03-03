@@ -11,10 +11,10 @@ import (
 	"github.com/Zyko0/go-sdl3/ttf"
 )
 
-func Run(cfg *Config) {
+func Run(cfg *Config) string {
 	if cfg.CSVFile == "" {
 		fmt.Println("Error: CSV file is required.")
-		os.Exit(1)
+		return ""
 	}
 
 	if err := sdl.Init(sdl.INIT_VIDEO | sdl.INIT_AUDIO | sdl.INIT_EVENTS); err != nil {
@@ -92,7 +92,14 @@ func Run(cfg *Config) {
 
 	if len(exp.Stimuli) > 0 {
 		lastStim := exp.Stimuli[len(exp.Stimuli)-1]
-		cfg.TotalDuration = lastStim.TimestampMS + lastStim.DurationMS + 500
+		lastDuration := lastStim.DurationMS
+		if lastStim.Type == StimImageStream || lastStim.Type == StimTextStream || lastStim.Type == StimSoundStream {
+			lastDuration = 0
+			for j := 0; j < len(lastStim.FrameDurations); j++ {
+				lastDuration += lastStim.FrameDurations[j] + lastStim.FrameGaps[j]
+			}
+		}
+		cfg.TotalDuration = lastStim.TimestampMS + lastDuration + 500
 	}
 
 	cache := NewResourceCache()
@@ -169,12 +176,12 @@ func Run(cfg *Config) {
 	}
 
 	if !DisplaySplash(renderer, cfg.StartSplash, cfg.ScreenWidth, cfg.ScreenHeight, cfg.ScaleFactor, cfg.BGColor) {
-		return
+		return ""
 	}
 
 	if !cfg.SkipWait {
 		if !WaitForKeyPress(renderer, font, cfg.ScreenWidth, cfg.ScreenHeight, cfg.TextColor, cfg.BGColor) {
-			return
+			return ""
 		}
 	}
 
@@ -196,4 +203,5 @@ func Run(cfg *Config) {
 	} else {
 		fmt.Printf("\nResults saved to %s\n", outputName)
 	}
+	return outputName
 }
