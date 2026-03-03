@@ -17,23 +17,63 @@ func detectDelimiter(path string) (rune, error) {
 	}
 	defer file.Close()
 
+	var lines []string
 	scanner := bufio.NewScanner(file)
-	if scanner.Scan() {
-		line := scanner.Text()
-		delimiters := []rune{',', ';', '\t', '|'}
-		maxCount := 0
-		bestDelim := ','
+	for i := 0; i < 5 && scanner.Scan(); i++ {
+		lines = append(lines, scanner.Text())
+	}
 
-		for _, d := range delimiters {
-			count := strings.Count(line, string(d))
-			if count > maxCount {
-				maxCount = count
-				bestDelim = d
+	if len(lines) == 0 {
+		return ',', nil
+	}
+
+	delimiters := []rune{',', ';', '\t', '|'}
+	bestDelim := delimiters[0]
+	maxScore := -1
+
+	for _, d := range delimiters {
+		colCounts := make([]int, 0, len(lines))
+		for _, line := range lines {
+			r := csv.NewReader(strings.NewReader(line))
+			r.Comma = d
+			r.LazyQuotes = true
+			rec, err := r.Read()
+			if err == nil {
+				colCounts = append(colCounts, len(rec))
 			}
 		}
-		return bestDelim, nil
+
+		if len(colCounts) == 0 {
+			continue
+		}
+
+		// Check consistency
+		consistent := true
+		for i := 1; i < len(colCounts); i++ {
+			if colCounts[i] != colCounts[0] || colCounts[i] < 2 {
+				consistent = false
+				break
+			}
+		}
+
+		score := 0
+		if consistent && colCounts[0] >= 4 { // Minimum 4 columns for expe3000
+			score = 1000 + colCounts[0]
+		} else {
+			for _, c := range colCounts {
+				if c > 1 {
+					score += c
+				}
+			}
+		}
+
+		if score > maxScore {
+			maxScore = score
+			bestDelim = d
+		}
 	}
-	return ',', nil
+
+	return bestDelim, nil
 }
 
 // parseStreamString parses strings like "image.png:200:50" or "image.png:200" or just "image.png"

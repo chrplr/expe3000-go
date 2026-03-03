@@ -201,5 +201,8 @@ func (c *ResourceCache) Destroy() {
 		if entry.Texture != nil {
 			entry.Texture.Destroy()
 		}
+		// Clear sound data reference to allow GC to collect if it's a Go slice
+		// Note: go-sdl3's LoadWAV currently returns a Go-allocated or copied slice
+		entry.Sound.Data = nil
 	}
 }

@@ -12,23 +12,10 @@ import (
 	"github.com/Zyko0/go-sdl3/ttf"
 )
 
-func Run(cfg *Config) string {
+func Run(cfg *Config) (string, error) {
 	if cfg.CSVFile == "" {
-		fmt.Println("Error: CSV file is required.")
-		return ""
+		return "", fmt.Errorf("CSV file is required")
 	}
-
-	if err := sdl.Init(sdl.INIT_VIDEO | sdl.INIT_AUDIO | sdl.INIT_EVENTS); err != nil {
-		fmt.Printf("SDL_Init Error: %v\n", err)
-		os.Exit(1)
-	}
-	defer sdl.Quit()
-
-	if err := ttf.Init(); err != nil {
-		fmt.Printf("TTF_Init Error: %v\n", err)
-		os.Exit(1)
-	}
-	defer ttf.Quit()
 
 	windowFlags := sdl.WINDOW_RESIZABLE
 	if cfg.Fullscreen {
@@ -37,8 +24,7 @@ func Run(cfg *Config) string {
 
 	window, renderer, err := sdl.CreateWindowAndRenderer("expe3000 (Go)", cfg.ScreenWidth, cfg.ScreenHeight, windowFlags)
 	if err != nil {
-		fmt.Printf("CreateWindowAndRenderer Error: %v\n", err)
-		os.Exit(1)
+		return "", fmt.Errorf("CreateWindowAndRenderer Error: %v", err)
 	}
 	defer window.Destroy()
 	defer renderer.Destroy()
@@ -78,22 +64,17 @@ func Run(cfg *Config) string {
 
 	exp, err := LoadExperiment(cfg.CSVFile)
 	if err != nil {
-		fmt.Printf("Failed to load experiment: %v\n", err)
-		os.Exit(1)
+		return "", fmt.Errorf("failed to load experiment: %v", err)
 	}
 
 	validationErrs := ValidateExperiment(exp, cfg.StimuliDir)
 	if len(validationErrs) > 0 {
-		fmt.Println("Experiment configuration contains errors:")
-		for _, vErr := range validationErrs {
-			fmt.Printf("- %v\n", vErr)
-		}
-		os.Exit(1)
+		return "", fmt.Errorf("experiment configuration contains %d errors (first: %v)", len(validationErrs), validationErrs[0])
 	}
 
 	if len(exp.Stimuli) > 0 {
 		lastStim := exp.Stimuli[len(exp.Stimuli)-1]
-		cfg.TotalDuration = lastStim.TimestampMS + lastStim.TotalDuration() + 500
+		cfg.TotalDuration = lastStim.TimestampMS + lastStim.TotalDuration() + uint64(gracePeriod)
 	}
 
 	cache := NewResourceCache()
@@ -101,8 +82,7 @@ func Run(cfg *Config) string {
 
 	resources, err := cache.Load(renderer, exp, font, cfg.TextColor, cfg.StimuliDir)
 	if err != nil {
-		fmt.Printf("Failed to load resources: %v\n", err)
-		os.Exit(1)
+		return "", fmt.Errorf("failed to load resources: %v", err)
 	}
 
 	mixer := NewAudioMixer()
@@ -110,8 +90,7 @@ func Run(cfg *Config) string {
 	cb := sdl.NewAudioStreamCallback(mixer.Callback)
 	stream := sdl.AUDIO_DEVICE_DEFAULT_PLAYBACK.OpenAudioDeviceStream(&spec, cb)
 	if stream == nil {
-		fmt.Printf("Failed to open audio stream\n")
-		os.Exit(1)
+		return "", fmt.Errorf("failed to open audio stream")
 	}
 	defer stream.Destroy()
 	stream.ResumeDevice()
@@ -175,12 +154,12 @@ func Run(cfg *Config) string {
 	}
 
 	if !DisplaySplash(renderer, cfg.StartSplash, cfg.ScreenWidth, cfg.ScreenHeight, cfg.ScaleFactor, cfg.BGColor) {
-		return ""
+		return "", nil
 	}
 
 	if !cfg.SkipWait {
 		if !WaitForKeyPress(renderer, font, cfg.ScreenWidth, cfg.ScreenHeight, cfg.TextColor, cfg.BGColor) {
-			return ""
+			return "", nil
 		}
 	}
 
@@ -195,18 +174,20 @@ func Run(cfg *Config) string {
 
 	log.EndTime = time.Now().Format("2006-01-02 15:04:05.000")
 
-	// Construct output filename based on input CSV basename and subject ID
-	baseName := filepath.Base(cfg.CSVFile)
-	ext := filepath.Ext(baseName)
-	baseName = strings.TrimSuffix(baseName, ext)
+	outputName := cfg.OutputFile
+	if outputName == "" {
+		// Construct default output filename based on input CSV basename and subject ID
+		baseName := filepath.Base(cfg.CSVFile)
+		ext := filepath.Ext(baseName)
+		baseName = strings.TrimSuffix(baseName, ext)
 
-	timestamp := time.Now().Format("20060102-150405")
-	outputName := fmt.Sprintf("%s_sub-%s_%s.csv", baseName, subjID, timestamp)
+		timestamp := time.Now().Format("20060102-150405")
+		outputName = fmt.Sprintf("%s_sub-%s_%s.csv", baseName, subjID, timestamp)
+	}
 
 	if err := log.Save(outputName); err != nil {
-		fmt.Printf("Failed to save event log: %v\n", err)
-	} else {
-		fmt.Printf("\nResults saved to %s\n", outputName)
+		return outputName, fmt.Errorf("failed to save event log: %v", err)
 	}
-	return outputName
+	fmt.Printf("\nResults saved to %s\n", outputName)
+	return outputName, nil
 }

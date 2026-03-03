@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"encoding/csv"
 	"expe3000/internal/version"
 	"os"
 	"runtime/debug"
@@ -51,30 +52,6 @@ func (l *EventLog) Log(intended, actual uint64, stype, label string, stimulusRow
 	})
 }
 
-func isNumeric(s string) bool {
-	if _, err := strconv.ParseFloat(s, 64); err == nil {
-		return true
-	}
-	return false
-}
-
-func writeRow(f *os.File, row []string) {
-	for i, field := range row {
-		if i > 0 {
-			f.WriteString("\t")
-		}
-		if isNumeric(field) {
-			f.WriteString(field)
-		} else {
-			f.WriteString("\"")
-			// Escape internal quotes
-			f.WriteString(strings.ReplaceAll(field, "\"", "\"\""))
-			f.WriteString("\"")
-		}
-	}
-	f.WriteString("\n")
-}
-
 func (l *EventLog) Save(path string) error {
 	f, err := os.Create(path)
 	if err != nil {
@@ -82,10 +59,14 @@ func (l *EventLog) Save(path string) error {
 	}
 	defer f.Close()
 
+	w := csv.NewWriter(f)
+	w.Comma = '\t'
+
 	// Write metadata
 	metadata := [][]string{
 		{"# expe3000 version: " + version.Version + " (Go version)"},
-		{"# Author: Christophe Pallier (christophe@pallier.org)"},
+		{"# Author: " + version.Author},
+		{"# License: " + version.License},
 		{"# GitHub: https://github.com/chrplr/expe3000"},
 		{"# SDL Version: " + l.SDLVersion},
 		{"# Platform: " + l.Platform},
@@ -117,13 +98,13 @@ func (l *EventLog) Save(path string) error {
 	metadata = append(metadata, []string{"# Command Line: " + l.CommandLine})
 
 	for _, m := range metadata {
-		writeRow(f, m)
+		w.Write(m)
 	}
 
 	// Write data header
 	outputHdr := []string{"subject_id", "intended_ms", "actual_ms", "type", "label"}
 	outputHdr = append(outputHdr, l.CSVHeader...)
-	writeRow(f, outputHdr)
+	w.Write(outputHdr)
 
 	// Write data entries
 	for _, e := range l.Entries {
@@ -141,9 +122,10 @@ func (l *EventLog) Save(path string) error {
 				row = append(row, "")
 			}
 		}
-		writeRow(f, row)
+		w.Write(row)
 	}
-	return nil
+	w.Flush()
+	return w.Error()
 }
 
 func DisplaySplash(renderer *sdl.Renderer, filePath string, screenW, screenH int, scaleFactor float32, bgColor sdl.Color) bool {
@@ -237,6 +219,13 @@ func drawFixationCross(renderer *sdl.Renderer, w, h int, color sdl.Color) {
 	renderer.RenderLine(mx, my-CrossSize, mx, my+CrossSize)
 }
 
+const (
+	msToNS      = 1000000
+	dlpPulseNS  = 5 * msToNS
+	vrrWaitNS   = 2 * msToNS
+	gracePeriod = 500
+)
+
 type experimentState struct {
 	cfg       *Config
 	exp       *Experiment
@@ -250,7 +239,7 @@ type experimentState struct {
 	stNS uint64 // Start time in NS
 	ctNS uint64 // Current time in NS relative to start
 
-	csIndex     int    // Current stimulus index
+	csIndex      int    // Current stimulus index
 	activeVisual int    // Active visual stimulus index (-1 if none)
 	visualEndNS  uint64 // End time for active visual stimulus in NS
 
@@ -277,7 +266,7 @@ func (s *experimentState) handleEvents() {
 			s.aborted = true
 		case sdl.EVENT_KEY_DOWN:
 			ctNS := sdl.TicksNS() - s.stNS
-			ctMS := ctNS / 1000000
+			ctMS := ctNS / msToNS
 			if ev.KeyboardEvent().Key == sdl.K_ESCAPE {
 				s.run = false
 				s.aborted = true
@@ -294,38 +283,33 @@ func (s *experimentState) handleEvents() {
 	}
 }
 
-func (s *experimentState) update() (bool, int) {
-	s.ctNS = sdl.TicksNS() - s.stNS
-
-	// Handle pulse-like DLP unsets
+func (s *experimentState) handleDLPPulses() {
 	if s.pulse2OffNS > 0 && s.ctNS >= s.pulse2OffNS {
-		s.dlp.Unset("2")
+		if s.dlp != nil {
+			s.dlp.Unset("2")
+		}
 		s.pulse2OffNS = 0
 	}
+}
 
-	trig := false
-	tidx := -1
+func (s *experimentState) checkStimulusOnset() (bool, int) {
+	if s.csIndex >= len(s.exp.Stimuli) {
+		return false, -1
+	}
 
-	// Check for new stimulus onset
-	if s.csIndex < len(s.exp.Stimuli) {
-		stim := &s.exp.Stimuli[s.csIndex]
-		onsetNS := stim.TimestampMS * 1000000
+	stim := &s.exp.Stimuli[s.csIndex]
+	onsetNS := stim.TimestampMS * msToNS
 
-		if (s.ctNS + s.laNS) >= onsetNS {
-			if (stim.Type == StimImage || stim.Type == StimText || stim.Type == StimBox || stim.Type == StimImageStream || stim.Type == StimTextStream) && len(s.resources[s.csIndex].Textures) > 0 {
+	if (s.ctNS + s.laNS) >= onsetNS {
+		trig := false
+		tidx := s.csIndex
+
+		switch stim.Type {
+		case StimImage, StimText, StimBox, StimImageStream, StimTextStream:
+			if len(s.resources[s.csIndex].Textures) > 0 {
 				s.activeVisual = s.csIndex
+				s.visualEndNS = ^uint64(0) // Set to max to prevent immediate offset in checkVisualOffset
 				trig = true
-				tidx = s.csIndex
-				if stim.Type == StimImageStream || stim.Type == StimTextStream {
-					totalDurNS := uint64(0)
-					for i := 0; i < len(stim.FilePaths); i++ {
-						totalDurNS += (stim.FrameDurations[i] + stim.FrameGaps[i]) * 1000000
-					}
-					s.visualEndNS = s.ctNS + totalDurNS
-				} else {
-					s.visualEndNS = s.ctNS + (stim.DurationMS * 1000000)
-				}
-
 				if s.dlp != nil {
 					if stim.Type == StimImage || stim.Type == StimImageStream {
 						s.dlp.Set("1")
@@ -333,69 +317,71 @@ func (s *experimentState) update() (bool, int) {
 						s.dlp.Set("3") // TEXT and BOX on line 3
 					}
 				}
-			} else if stim.Type == StimSound && len(s.resources[s.csIndex].Sounds) > 0 {
+			}
+		case StimSound:
+			if len(s.resources[s.csIndex].Sounds) > 0 {
 				if s.mixer.Play(&s.resources[s.csIndex].Sounds[0]) {
-					s.log.Log(stim.TimestampMS, s.ctNS/1000000, "SOUND_ONSET", stim.FilePaths[0], stim.RawRow)
+					s.log.Log(stim.TimestampMS, s.ctNS/msToNS, "SOUND_ONSET", stim.FilePaths[0], stim.RawRow)
 					if s.dlp != nil {
 						s.dlp.Set("2")
-						s.pulse2OffNS = s.ctNS + 5000000 // 5ms in NS
+						s.pulse2OffNS = s.ctNS + dlpPulseNS
 					}
 				}
-			} else if stim.Type == StimSoundStream && len(s.resources[s.csIndex].Sounds) > 0 {
+			}
+		case StimSoundStream:
+			if len(s.resources[s.csIndex].Sounds) > 0 {
 				s.csidxSoundStream = 0
 				if s.mixer.Play(&s.resources[s.csIndex].Sounds[0]) {
-					s.log.Log(stim.TimestampMS, s.ctNS/1000000, "SOUND_STREAM_ONSET", strings.Join(stim.FilePaths, "~"), stim.RawRow)
+					s.log.Log(stim.TimestampMS, s.ctNS/msToNS, "SOUND_STREAM_ONSET", strings.Join(stim.FilePaths, "~"), stim.RawRow)
 					if s.dlp != nil {
 						s.dlp.Set("2")
-						s.pulse2OffNS = s.ctNS + 5000000
+						s.pulse2OffNS = s.ctNS + dlpPulseNS
 					}
 				}
-				s.csvetSoundNS = s.ctNS + (stim.FrameDurations[0]+stim.FrameGaps[0])*1000000
+				s.csvetSoundNS = s.ctNS + (stim.FrameDurations[0]+stim.FrameGaps[0])*msToNS
 			}
-			s.csIndex++
 		}
+		s.csIndex++
+		return trig, tidx
+	}
+	return false, -1
+}
+
+func (s *experimentState) advanceSoundStream() {
+	if s.csidxSoundStream == -1 {
+		return
 	}
 
-	// Handle Sound Streams
-	if s.csidxSoundStream != -1 && s.csidxSoundStream+1 < len(s.resources[s.csIndex-1].Sounds) && s.ctNS >= s.csvetSoundNS {
+	stim := &s.exp.Stimuli[s.csIndex-1]
+	if s.csidxSoundStream+1 < len(s.resources[s.csIndex-1].Sounds) && s.ctNS >= s.csvetSoundNS {
 		s.csidxSoundStream++
-		stim := &s.exp.Stimuli[s.csIndex-1]
 		if s.mixer.Play(&s.resources[s.csIndex-1].Sounds[s.csidxSoundStream]) {
-			// Calculate intended MS based on cumulative previous frame durations and gaps
 			intendedMS := stim.TimestampMS
 			for i := 0; i < s.csidxSoundStream; i++ {
 				intendedMS += stim.FrameDurations[i] + stim.FrameGaps[i]
 			}
-			s.log.Log(intendedMS, s.ctNS/1000000, "SOUND_STREAM_FRAME", stim.FilePaths[s.csidxSoundStream], stim.RawRow)
+			s.log.Log(intendedMS, s.ctNS/msToNS, "SOUND_STREAM_FRAME", stim.FilePaths[s.csidxSoundStream], stim.RawRow)
 			if s.dlp != nil {
 				s.dlp.Set("2")
-				s.pulse2OffNS = s.ctNS + 5000000
+				s.pulse2OffNS = s.ctNS + dlpPulseNS
 			}
 		}
-		s.csvetSoundNS = s.ctNS + (stim.FrameDurations[s.csidxSoundStream]+stim.FrameGaps[s.csidxSoundStream])*1000000
+		s.csvetSoundNS = s.ctNS + (stim.FrameDurations[s.csidxSoundStream]+stim.FrameGaps[s.csidxSoundStream])*msToNS
 		if s.csidxSoundStream == len(s.resources[s.csIndex-1].Sounds)-1 {
 			s.csidxSoundStream = -1
 		}
 	}
+}
 
-	// Handle Visual Offsets
+func (s *experimentState) checkVisualOffset() {
 	if s.activeVisual != -1 && s.ctNS >= s.visualEndNS {
 		stim := &s.exp.Stimuli[s.activeVisual]
 		totalDurationMS := stim.TotalDuration()
 		intendedOffMS := stim.TimestampMS + totalDurationMS
 		label := strings.Join(stim.FilePaths, "~")
-		stype := "IMAGE_OFFSET"
-		switch stim.Type {
-		case StimText:
-			stype = "TEXT_OFFSET"
-		case StimBox:
-			stype = "BOX_OFFSET"
-		case StimImageStream:
-			stype = "IMAGE_STREAM_OFFSET"
-		case StimTextStream:
-			stype = "TEXT_STREAM_OFFSET"
-		}
-		s.log.Log(intendedOffMS, s.ctNS/1000000, stype, label, stim.RawRow)
+		stype := stim.Type.String() + "_OFFSET"
+
+		s.log.Log(intendedOffMS, s.ctNS/msToNS, stype, label, stim.RawRow)
 
 		if s.dlp != nil {
 			if stim.Type == StimImage || stim.Type == StimImageStream {
@@ -406,11 +392,22 @@ func (s *experimentState) update() (bool, int) {
 		}
 		s.activeVisual = -1
 	}
+}
 
-	// Check if finished
-	if s.csIndex >= len(s.exp.Stimuli) && s.activeVisual == -1 && s.ctNS >= s.cfg.TotalDuration*1000000 {
+func (s *experimentState) checkFinished() {
+	if s.csIndex >= len(s.exp.Stimuli) && s.activeVisual == -1 && s.ctNS >= s.cfg.TotalDuration*msToNS {
 		s.run = false
 	}
+}
+
+func (s *experimentState) update() (bool, int) {
+	s.ctNS = sdl.TicksNS() - s.stNS
+
+	s.handleDLPPulses()
+	trig, tidx := s.checkStimulusOnset()
+	s.advanceSoundStream()
+	s.checkVisualOffset()
+	s.checkFinished()
 
 	return trig, tidx
 }
@@ -426,18 +423,15 @@ func (s *experimentState) render() {
 		frameIdx := 0
 		showBlank := false
 		if stim.Type == StimImageStream || stim.Type == StimTextStream {
-			totalDurationNS := uint64(0)
-			for i := 0; i < len(stim.FilePaths); i++ {
-				totalDurationNS += (stim.FrameDurations[i] + stim.FrameGaps[i]) * 1000000
-			}
+			totalDurationNS := uint64(stim.TotalDuration()) * msToNS
 			elapsedNS := s.ctNS - (s.visualEndNS - totalDurationNS)
-			
+
 			// Find which frame we are in
 			cumulNS := uint64(0)
 			frameIdx = -1
 			for i := 0; i < len(stim.FrameDurations); i++ {
-				durNS := stim.FrameDurations[i] * 1000000
-				gapNS := stim.FrameGaps[i] * 1000000
+				durNS := stim.FrameDurations[i] * msToNS
+				gapNS := stim.FrameGaps[i] * msToNS
 				if elapsedNS < cumulNS + durNS {
 					frameIdx = i
 					showBlank = false
@@ -527,9 +521,9 @@ func RunExperiment(cfg *Config, exp *Experiment, resources []Resource, renderer 
 
 		// In VRR mode, if we are close to an onset, busy-wait to hit it exactly
 		if cfg.VRR && state.csIndex < len(state.exp.Stimuli) {
-			onsetNS := state.exp.Stimuli[state.csIndex].TimestampMS * 1000000
+			onsetNS := state.exp.Stimuli[state.csIndex].TimestampMS * msToNS
 			ctNS := sdl.TicksNS() - state.stNS
-			if ctNS < onsetNS && onsetNS-ctNS <= 2000000 { // If within 2ms, busy-wait
+			if ctNS < onsetNS && onsetNS-ctNS <= vrrWaitNS { // If within 2ms, busy-wait
 				for sdl.TicksNS()-state.stNS < onsetNS {
 					// busy wait
 				}
@@ -554,9 +548,9 @@ func RunExperiment(cfg *Config, exp *Experiment, resources []Resource, renderer 
 			case StimTextStream:
 				stype = "TEXT_STREAM_ONSET"
 			}
-			state.log.Log(stim.TimestampMS, otNS/1000000, stype, label, stim.RawRow)
+			state.log.Log(stim.TimestampMS, otNS/msToNS, stype, label, stim.RawRow)
 
-			totalDurNS := uint64(stim.TotalDuration()) * 1000000
+			totalDurNS := uint64(stim.TotalDuration()) * msToNS
 			state.visualEndNS = otNS + totalDurNS
 		}
 
@@ -567,3 +561,4 @@ func RunExperiment(cfg *Config, exp *Experiment, resources []Resource, renderer 
 
 	return !state.aborted
 }
+

@@ -3,7 +3,6 @@ package engine
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/Zyko0/go-sdl3/sdl"
@@ -39,8 +38,8 @@ type Config struct {
 
 func ParseColor(s string) sdl.Color {
 	var r, g, b, a uint8
-	fmt.Sscanf(s, "%d,%d,%d,%d", &r, &g, &b, &a)
-	if a == 0 && s != "" && !strings.Contains(s, ",0") {
+	n, _ := fmt.Sscanf(s, "%d,%d,%d,%d", &r, &g, &b, &a)
+	if n < 4 && s != "" {
 		a = 255
 	}
 	return sdl.Color{R: r, G: g, B: b, A: a}

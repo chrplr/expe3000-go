@@ -14,8 +14,8 @@ var (
 
 // These are typically static constants
 const (
-	Author  = "Jane Doe <jane@example.com>"
-	License = "Apache-2.0"
+	Author  = "Christophe Pallier <christophe@pallier.org>"
+	License = "GPLv3"
 )
 
 // Info returns a formatted string containing all version metadata

@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strconv"
+	"unicode/utf8"
 
 	"github.com/Zyko0/go-sdl3/sdl"
 	"github.com/Zyko0/go-sdl3/ttf"
@@ -28,19 +29,100 @@ func openURL(url string) error {
 	return exec.Command(cmd, args...).Start()
 }
 
+func getTargetField(focusBox int, cfg *Config, displayStr, fontSizeStr *string) *string {
+	switch focusBox {
+	case 0: return &cfg.SubjectID
+	case 1: return &cfg.CSVFile
+	case 2: return &cfg.StimuliDir
+	case 3: return &cfg.OutputFile
+	case 4: return &cfg.StartSplash
+	case 5: return &cfg.FontFile
+	case 6: return &cfg.DLPDevice
+	case 7: return displayStr
+	case 8: return fontSizeStr
+	default: return nil
+	}
+}
+
+func renderText(renderer *sdl.Renderer, font *ttf.Font, text string, x, y float32, color sdl.Color) {
+	if text == "" {
+		return
+	}
+	surf, err := font.RenderTextBlended(text, color)
+	if err != nil || surf == nil {
+		return
+	}
+	defer surf.Destroy()
+	tex, err := renderer.CreateTextureFromSurface(surf)
+	if err != nil {
+		return
+	}
+	defer tex.Destroy()
+	r := sdl.FRect{X: x, Y: y, W: float32(surf.W), H: float32(surf.H)}
+	renderer.RenderTexture(tex, nil, &r)
+}
+
+func renderInputBox(renderer *sdl.Renderer, font *ttf.Font, label, text string, x, y, w, h float32, isFocused bool, showBrowse bool) {
+	black := sdl.Color{R: 0, G: 0, B: 0, A: 255}
+	renderText(renderer, font, label, x, y-25, black)
+
+	renderer.SetDrawColor(255, 255, 255, 255)
+	box := sdl.FRect{X: x, Y: y, W: w, H: h}
+	renderer.RenderFillRect(&box)
+	if isFocused {
+		renderer.SetDrawColor(0, 120, 255, 255)
+	} else {
+		renderer.SetDrawColor(180, 180, 180, 255)
+	}
+	renderer.RenderRect(&box)
+
+	displayText := text
+	if len(text) > 40 {
+		displayText = "..." + text[len(text)-37:]
+	}
+	renderText(renderer, font, displayText, x+5, y+5, black)
+
+	if showBrowse {
+		renderer.SetDrawColor(200, 200, 200, 255)
+		btn := sdl.FRect{X: x + w + 10, Y: y, W: 35, H: h}
+		renderer.RenderFillRect(&btn)
+		renderer.SetDrawColor(0, 0, 0, 255)
+		renderer.RenderRect(&btn)
+		renderText(renderer, font, "...", x+w+20, y+5, black)
+	}
+}
+
+func renderCheckbox(renderer *sdl.Renderer, font *ttf.Font, label string, x, y float32, checked bool) {
+	black := sdl.Color{R: 0, G: 0, B: 0, A: 255}
+	const checkSize = 20
+
+	renderer.SetDrawColor(255, 255, 255, 255)
+	box := sdl.FRect{X: x, Y: y, W: checkSize, H: checkSize}
+	renderer.RenderFillRect(&box)
+	renderer.SetDrawColor(0, 0, 0, 255)
+	renderer.RenderRect(&box)
+	if checked {
+		mark := sdl.FRect{X: x + 4, Y: y + 4, W: checkSize - 8, H: checkSize - 8}
+		renderer.SetDrawColor(0, 150, 0, 255)
+		renderer.RenderFillRect(&mark)
+	}
+	renderText(renderer, font, label, x+30, y, black)
+}
+
+func renderCenteredText(renderer *sdl.Renderer, font *ttf.Font, text string, rect sdl.FRect, color sdl.Color) {
+	if text == "" {
+		return
+	}
+	tw, th, err := font.StringSize(text)
+	if err != nil {
+		return
+	}
+	x := rect.X + (rect.W-float32(tw))/2
+	y := rect.Y + (rect.H-float32(th))/2
+	renderText(renderer, font, text, x, y, color)
+}
+
 func RunGuiSetup(cfg *Config) bool {
-	if err := sdl.Init(sdl.INIT_VIDEO | sdl.INIT_EVENTS); err != nil {
-		fmt.Printf("SDL_Init Error: %v\n", err)
-		return false
-	}
-	defer sdl.Quit()
-
-	if err := ttf.Init(); err != nil {
-		fmt.Printf("TTF_Init Error: %v\n", err)
-		return false
-	}
-	defer ttf.Quit()
-
 	window, renderer, err := sdl.CreateWindowAndRenderer("expe3000 Setup (Go) v2", 800, 800, 0)
 	if err != nil {
 		fmt.Printf("CreateWindowAndRenderer Error: %v\n", err)
@@ -64,7 +146,7 @@ func RunGuiSetup(cfg *Config) bool {
 	displayStr := strconv.Itoa(cfg.DisplayIndex)
 	fontSizeStr := strconv.Itoa(cfg.FontSize)
 
-	focusBox := -1 // 0: subject, 1: csv, 2: stimuliDir, 3: output, 4: splash, 5: font, 6: dlp, 7: display, 8: fontsize
+	focusBox := -1
 
 	type ResOption struct {
 		W, H  int
@@ -78,7 +160,7 @@ func RunGuiSetup(cfg *Config) bool {
 		{2560, 1440, "2560x1440 (QHD)"},
 		{3840, 2160, "3840x2160 (4K UHD)"},
 	}
-	selectedRes := 3 // Default to 1080p
+	selectedRes := 3
 	for i, res := range resOptions {
 		if cfg.ScreenWidth == res.W && cfg.ScreenHeight == res.H {
 			selectedRes = i
@@ -89,14 +171,12 @@ func RunGuiSetup(cfg *Config) bool {
 	window.StartTextInput()
 	defer window.StopTextInput()
 
-	// Layout Constants
 	const (
 		C1X           = 30
 		C2X           = 450
 		BoxW          = 350
 		BoxH          = 30
 		RowSpacing    = 60
-		LabelOffset   = 25
 		BrowseX       = 390
 		BrowseW       = 35
 		ResStartYS    = 240
@@ -117,7 +197,6 @@ func RunGuiSetup(cfg *Config) bool {
 				mx, my := me.X, me.Y
 
 				focusBox = -1
-				// Column 1 hit detection (0-5)
 				for i := 0; i < 6; i++ {
 					by := float32(40 + i*RowSpacing)
 					if mx >= C1X && mx <= C1X+BoxW && my >= by && my <= by+BoxH {
@@ -125,7 +204,6 @@ func RunGuiSetup(cfg *Config) bool {
 						break
 					}
 				}
-				// Column 2 hit detection (6-8)
 				if focusBox == -1 {
 					for i := 0; i < 3; i++ {
 						by := float32(40 + i*RowSpacing)
@@ -136,12 +214,10 @@ func RunGuiSetup(cfg *Config) bool {
 					}
 				}
 
-				// Help button
 				if mx >= 20 && mx <= 100 && my >= StartBtnY && my <= StartBtnY+40 {
 					openURL("https://chrplr.github.io/expe3000-go")
 				}
 
-				// Browse buttons in Col 1
 				if mx >= BrowseX && mx <= BrowseX+BrowseW {
 					for i := 1; i < 6; i++ {
 						by := float32(40 + i*RowSpacing)
@@ -190,7 +266,6 @@ func RunGuiSetup(cfg *Config) bool {
 					}
 				}
 
-				// Resolution Options (Column 2)
 				for i := range resOptions {
 					ry := float32(ResStartYS + i*CheckSpacing)
 					if mx >= C2X && mx <= C2X+200 && my >= ry && my <= ry+CheckSize {
@@ -198,7 +273,6 @@ func RunGuiSetup(cfg *Config) bool {
 					}
 				}
 
-				// Options (Column 2)
 				if mx >= C2X && mx <= C2X+200 && my >= OptionsY && my <= OptionsY+CheckSize {
 					cfg.UseFixation = !cfg.UseFixation
 				}
@@ -212,7 +286,6 @@ func RunGuiSetup(cfg *Config) bool {
 					cfg.VRR = !cfg.VRR
 				}
 
-				// Start button
 				if mx >= 350 && mx <= 450 && my >= StartBtnY && my <= StartBtnY+40 {
 					if cfg.CSVFile != "" {
 						cfg.ScreenWidth = resOptions[selectedRes].W
@@ -228,45 +301,21 @@ func RunGuiSetup(cfg *Config) bool {
 					}
 				}
 
-				// Quit button
 				if mx >= 690 && mx <= 790 && my >= StartBtnY && my <= StartBtnY+40 {
 					return false
 				}
 			case sdl.EVENT_TEXT_INPUT:
 				ti := e.TextInputEvent()
-				if focusBox != -1 {
-					var target *string
-					switch focusBox {
-					case 0: target = &cfg.SubjectID
-					case 1: target = &cfg.CSVFile
-					case 2: target = &cfg.StimuliDir
-					case 3: target = &cfg.OutputFile
-					case 4: target = &cfg.StartSplash
-					case 5: target = &cfg.FontFile
-					case 6: target = &cfg.DLPDevice
-					case 7: target = &displayStr
-					case 8: target = &fontSizeStr
-					}
+				if target := getTargetField(focusBox, cfg, &displayStr, &fontSizeStr); target != nil {
 					*target += ti.Text
 				}
 			case sdl.EVENT_KEY_DOWN:
 				ke := e.KeyboardEvent()
-				if focusBox != -1 {
-					if ke.Key == sdl.K_BACKSPACE {
-						var target *string
-						switch focusBox {
-						case 0: target = &cfg.SubjectID
-						case 1: target = &cfg.CSVFile
-						case 2: target = &cfg.StimuliDir
-						case 3: target = &cfg.OutputFile
-						case 4: target = &cfg.StartSplash
-						case 5: target = &cfg.FontFile
-						case 6: target = &cfg.DLPDevice
-						case 7: target = &displayStr
-						case 8: target = &fontSizeStr
-						}
+				if focusBox != -1 && ke.Key == sdl.K_BACKSPACE {
+					if target := getTargetField(focusBox, cfg, &displayStr, &fontSizeStr); target != nil {
 						if len(*target) > 0 {
-							*target = (*target)[:len(*target)-1]
+							_, size := utf8.DecodeLastRuneInString(*target)
+							*target = (*target)[:len(*target)-size]
 						}
 					}
 				}
@@ -277,33 +326,9 @@ func RunGuiSetup(cfg *Config) bool {
 		renderer.Clear()
 		black := sdl.Color{R: 0, G: 0, B: 0, A: 255}
 
-		// Input Labels and Boxes
 		col1Labels := []string{"Subject ID:", "Experiment CSV:", "Stimuli Directory:", "Output Results CSV:", "Start Splash Image:", "TTF Font File:"}
 		for i, label := range col1Labels {
-			ly := float32(15 + i*RowSpacing)
-			by := float32(40 + i*RowSpacing)
-			surf, err := guiFont.RenderTextBlended(label, black)
-			if err == nil && surf != nil {
-				tex, err := renderer.CreateTextureFromSurface(surf)
-				if err == nil {
-					r := sdl.FRect{X: C1X, Y: ly, W: float32(surf.W), H: float32(surf.H)}
-					renderer.RenderTexture(tex, nil, &r)
-					tex.Destroy()
-				}
-				surf.Destroy()
-			}
-
-			renderer.SetDrawColor(255, 255, 255, 255)
-			box := sdl.FRect{X: C1X, Y: by, W: BoxW, H: BoxH}
-			renderer.RenderFillRect(&box)
-			if focusBox == i {
-				renderer.SetDrawColor(0, 120, 255, 255)
-			} else {
-				renderer.SetDrawColor(180, 180, 180, 255)
-			}
-			renderer.RenderRect(&box)
-
-			var text string
+			text := ""
 			switch i {
 			case 0: text = cfg.SubjectID
 			case 1: text = cfg.CSVFile
@@ -312,263 +337,47 @@ func RunGuiSetup(cfg *Config) bool {
 			case 4: text = cfg.StartSplash
 			case 5: text = cfg.FontFile
 			}
-			if text != "" {
-				// Only show end of path if it's too long
-				displayPath := text
-				if len(text) > 40 {
-					displayPath = "..." + text[len(text)-37:]
-				}
-				surf, err := guiFont.RenderTextBlended(displayPath, black)
-				if err == nil && surf != nil {
-					tex, err := renderer.CreateTextureFromSurface(surf)
-					if err == nil {
-						r := sdl.FRect{X: C1X + 5, Y: by + 5, W: float32(surf.W), H: float32(surf.H)}
-						renderer.RenderTexture(tex, nil, &r)
-						tex.Destroy()
-					}
-					surf.Destroy()
-				}
-			}
-
-			if i > 0 {
-				renderer.SetDrawColor(200, 200, 200, 255)
-				btn := sdl.FRect{X: BrowseX, Y: by, W: BrowseW, H: BoxH}
-				renderer.RenderFillRect(&btn)
-				renderer.SetDrawColor(0, 0, 0, 255)
-				renderer.RenderRect(&btn)
-				surf, err := guiFont.RenderTextBlended("...", black)
-				if err == nil && surf != nil {
-					tex, err := renderer.CreateTextureFromSurface(surf)
-					if err == nil {
-						r := sdl.FRect{X: BrowseX + 10, Y: by + 5, W: float32(surf.W), H: float32(surf.H)}
-						renderer.RenderTexture(tex, nil, &r)
-						tex.Destroy()
-					}
-					surf.Destroy()
-				}
-			}
+			renderInputBox(renderer, guiFont, label, text, C1X, float32(40+i*RowSpacing), BoxW, BoxH, focusBox == i, i > 0)
 		}
 
 		col2Labels := []string{"DLP Device:", "Display Index:", "Font Size:"}
 		for i, label := range col2Labels {
-			ly := float32(15 + i*RowSpacing)
-			by := float32(40 + i*RowSpacing)
-			surf, err := guiFont.RenderTextBlended(label, black)
-			if err == nil && surf != nil {
-				tex, err := renderer.CreateTextureFromSurface(surf)
-				if err == nil {
-					r := sdl.FRect{X: C2X, Y: ly, W: float32(surf.W), H: float32(surf.H)}
-					renderer.RenderTexture(tex, nil, &r)
-					tex.Destroy()
-				}
-				surf.Destroy()
-			}
-
-			renderer.SetDrawColor(255, 255, 255, 255)
-			box := sdl.FRect{X: C2X, Y: by, W: BoxW, H: BoxH}
-			renderer.RenderFillRect(&box)
-			if focusBox == 6+i {
-				renderer.SetDrawColor(0, 120, 255, 255)
-			} else {
-				renderer.SetDrawColor(180, 180, 180, 255)
-			}
-			renderer.RenderRect(&box)
-
-			var text string
+			text := ""
 			switch i {
 			case 0: text = cfg.DLPDevice
 			case 1: text = displayStr
 			case 2: text = fontSizeStr
 			}
-			if text != "" {
-				surf, err := guiFont.RenderTextBlended(text, black)
-				if err == nil && surf != nil {
-					tex, err := renderer.CreateTextureFromSurface(surf)
-					if err == nil {
-						r := sdl.FRect{X: C2X + 5, Y: by + 5, W: float32(surf.W), H: float32(surf.H)}
-						renderer.RenderTexture(tex, nil, &r)
-						tex.Destroy()
-					}
-					surf.Destroy()
-				}
-			}
+			renderInputBox(renderer, guiFont, label, text, C2X, float32(40+i*RowSpacing), BoxW, BoxH, focusBox == 6+i, false)
 		}
 
-		// Resolution Label (Column 2)
-		surfRes, err := guiFont.RenderTextBlended("Resolution:", black)
-		if err == nil && surfRes != nil {
-			tex, err := renderer.CreateTextureFromSurface(surfRes)
-			if err == nil {
-				r := sdl.FRect{X: C2X, Y: ResStartYS - 25, W: float32(surfRes.W), H: float32(surfRes.H)}
-				renderer.RenderTexture(tex, nil, &r)
-				tex.Destroy()
-			}
-			surfRes.Destroy()
-		}
-
-		// Resolution Options (Column 2)
+		renderText(renderer, guiFont, "Resolution:", C2X, ResStartYS-25, black)
 		for i, opt := range resOptions {
-			ry := float32(ResStartYS + i*CheckSpacing)
-			renderer.SetDrawColor(255, 255, 255, 255)
-			check := sdl.FRect{X: C2X, Y: ry, W: CheckSize, H: CheckSize}
-			renderer.RenderFillRect(&check)
-			renderer.SetDrawColor(0, 0, 0, 255)
-			renderer.RenderRect(&check)
-			if selectedRes == i {
-				mark := sdl.FRect{X: C2X + 4, Y: ry + 4, W: CheckSize - 8, H: CheckSize - 8}
-				renderer.SetDrawColor(0, 150, 0, 255)
-				renderer.RenderFillRect(&mark)
-			}
-			surf, err := guiFont.RenderTextBlended(opt.Label, black)
-			if err == nil && surf != nil {
-				tex, err := renderer.CreateTextureFromSurface(surf)
-				if err == nil {
-					r := sdl.FRect{X: C2X + 30, Y: ry, W: float32(surf.W), H: float32(surf.H)}
-					renderer.RenderTexture(tex, nil, &r)
-					tex.Destroy()
-				}
-				surf.Destroy()
-			}
+			renderCheckbox(renderer, guiFont, opt.Label, C2X, float32(ResStartYS+i*CheckSpacing), selectedRes == i)
 		}
 
-		// Options (Column 2)
-		fy := float32(OptionsY)
-		renderer.SetDrawColor(255, 255, 255, 255)
-		fixCheck := sdl.FRect{X: C2X, Y: fy, W: CheckSize, H: CheckSize}
-		renderer.RenderFillRect(&fixCheck)
-		renderer.SetDrawColor(0, 0, 0, 255)
-		renderer.RenderRect(&fixCheck)
-		if cfg.UseFixation {
-			mark := sdl.FRect{X: C2X + 4, Y: fy + 4, W: CheckSize - 8, H: CheckSize - 8}
-			renderer.SetDrawColor(0, 150, 0, 255)
-			renderer.RenderFillRect(&mark)
-		}
-		surfFix, err := guiFont.RenderTextBlended("Show fixation cross", black)
-		if err == nil && surfFix != nil {
-			tex, err := renderer.CreateTextureFromSurface(surfFix)
-			if err == nil {
-				r := sdl.FRect{X: C2X + 30, Y: fy, W: float32(surfFix.W), H: float32(surfFix.H)}
-				renderer.RenderTexture(tex, nil, &r)
-				tex.Destroy()
-			}
-			surfFix.Destroy()
-		}
+		renderCheckbox(renderer, guiFont, "Show fixation cross", C2X, OptionsY, cfg.UseFixation)
+		renderCheckbox(renderer, guiFont, "Fullscreen mode", C2X, OptionsY+CheckSpacing, cfg.Fullscreen)
+		renderCheckbox(renderer, guiFont, "Skip 'Press any key' screen", C2X, OptionsY+2*CheckSpacing, cfg.SkipWait)
+		renderCheckbox(renderer, guiFont, "Variable Refresh Rate (VRR)", C2X, OptionsY+3*CheckSpacing, cfg.VRR)
 
-		fsy := float32(OptionsY + CheckSpacing)
-		renderer.SetDrawColor(255, 255, 255, 255)
-		fullCheck := sdl.FRect{X: C2X, Y: fsy, W: CheckSize, H: CheckSize}
-		renderer.RenderFillRect(&fullCheck)
-		renderer.SetDrawColor(0, 0, 0, 255)
-		renderer.RenderRect(&fullCheck)
-		if cfg.Fullscreen {
-			mark := sdl.FRect{X: C2X + 4, Y: fsy + 4, W: CheckSize - 8, H: CheckSize - 8}
-			renderer.SetDrawColor(0, 150, 0, 255)
-			renderer.RenderFillRect(&mark)
-		}
-		surfFull, err := guiFont.RenderTextBlended("Fullscreen mode", black)
-		if err == nil && surfFull != nil {
-			tex, err := renderer.CreateTextureFromSurface(surfFull)
-			if err == nil {
-				r := sdl.FRect{X: C2X + 30, Y: fsy, W: float32(surfFull.W), H: float32(surfFull.H)}
-				renderer.RenderTexture(tex, nil, &r)
-				tex.Destroy()
-			}
-			surfFull.Destroy()
-		}
-
-		swy := float32(OptionsY + 2*CheckSpacing)
-		renderer.SetDrawColor(255, 255, 255, 255)
-		skipCheck := sdl.FRect{X: C2X, Y: swy, W: CheckSize, H: CheckSize}
-		renderer.RenderFillRect(&skipCheck)
-		renderer.SetDrawColor(0, 0, 0, 255)
-		renderer.RenderRect(&skipCheck)
-		if cfg.SkipWait {
-			mark := sdl.FRect{X: C2X + 4, Y: swy + 4, W: CheckSize - 8, H: CheckSize - 8}
-			renderer.SetDrawColor(0, 150, 0, 255)
-			renderer.RenderFillRect(&mark)
-		}
-		surfSkip, err := guiFont.RenderTextBlended("Skip 'Press any key' screen", black)
-		if err == nil && surfSkip != nil {
-			tex, err := renderer.CreateTextureFromSurface(surfSkip)
-			if err == nil {
-				r := sdl.FRect{X: C2X + 30, Y: swy, W: float32(surfSkip.W), H: float32(surfSkip.H)}
-				renderer.RenderTexture(tex, nil, &r)
-				tex.Destroy()
-			}
-			surfSkip.Destroy()
-		}
-
-		vry := float32(OptionsY + 3*CheckSpacing)
-		renderer.SetDrawColor(255, 255, 255, 255)
-		vrrCheck := sdl.FRect{X: C2X, Y: vry, W: CheckSize, H: CheckSize}
-		renderer.RenderFillRect(&vrrCheck)
-		renderer.SetDrawColor(0, 0, 0, 255)
-		renderer.RenderRect(&vrrCheck)
-		if cfg.VRR {
-			mark := sdl.FRect{X: C2X + 4, Y: vry + 4, W: CheckSize - 8, H: CheckSize - 8}
-			renderer.SetDrawColor(0, 150, 0, 255)
-			renderer.RenderFillRect(&mark)
-		}
-		surfVRR, err := guiFont.RenderTextBlended("Variable Refresh Rate (VRR)", black)
-		if err == nil && surfVRR != nil {
-			tex, err := renderer.CreateTextureFromSurface(surfVRR)
-			if err == nil {
-				r := sdl.FRect{X: C2X + 30, Y: vry, W: float32(surfVRR.W), H: float32(surfVRR.H)}
-				renderer.RenderTexture(tex, nil, &r)
-				tex.Destroy()
-			}
-			surfVRR.Destroy()
-		}
-
-		// Help button
 		renderer.SetDrawColor(0, 120, 255, 255)
 		helpBtn := sdl.FRect{X: 20, Y: StartBtnY, W: 80, H: 40}
 		renderer.RenderFillRect(&helpBtn)
 		white := sdl.Color{R: 255, G: 255, B: 255, A: 255}
-		surfHelp, err := guiFont.RenderTextBlended("HELP", white)
-		if err == nil && surfHelp != nil {
-			tex, err := renderer.CreateTextureFromSurface(surfHelp)
-			if err == nil {
-				r := sdl.FRect{X: 20 + (80-float32(surfHelp.W))/2, Y: StartBtnY + (40-float32(surfHelp.H))/2, W: float32(surfHelp.W), H: float32(surfHelp.H)}
-				renderer.RenderTexture(tex, nil, &r)
-				tex.Destroy()
-			}
-			surfHelp.Destroy()
-		}
+		renderCenteredText(renderer, guiFont, "HELP", helpBtn, white)
 
-		// Start button
 		renderer.SetDrawColor(0, 150, 0, 255)
 		startBtn := sdl.FRect{X: 350, Y: StartBtnY, W: 100, H: 40}
 		renderer.RenderFillRect(&startBtn)
-		surfSt, err := guiFont.RenderTextBlended("START", white)
-		if err == nil && surfSt != nil {
-			tex, err := renderer.CreateTextureFromSurface(surfSt)
-			if err == nil {
-				r := sdl.FRect{X: 350 + (100-float32(surfSt.W))/2, Y: StartBtnY + (40-float32(surfSt.H))/2, W: float32(surfSt.W), H: float32(surfSt.H)}
-				renderer.RenderTexture(tex, nil, &r)
-				tex.Destroy()
-			}
-			surfSt.Destroy()
-		}
+		renderCenteredText(renderer, guiFont, "START", startBtn, white)
 
-		// Quit button
 		renderer.SetDrawColor(180, 0, 0, 255)
 		quitBtn := sdl.FRect{X: 690, Y: StartBtnY, W: 100, H: 40}
 		renderer.RenderFillRect(&quitBtn)
-		surfQt, err := guiFont.RenderTextBlended("QUIT", white)
-		if err == nil && surfQt != nil {
-			tex, err := renderer.CreateTextureFromSurface(surfQt)
-			if err == nil {
-				r := sdl.FRect{X: 690 + (100-float32(surfQt.W))/2, Y: StartBtnY + (40-float32(surfQt.H))/2, W: float32(surfQt.W), H: float32(surfQt.H)}
-				renderer.RenderTexture(tex, nil, &r)
-				tex.Destroy()
-			}
-			surfQt.Destroy()
-		}
+		renderCenteredText(renderer, guiFont, "QUIT", quitBtn, white)
 
 		renderer.Present()
 		sdl.Delay(10)
 	}
-
-	return false
 }
