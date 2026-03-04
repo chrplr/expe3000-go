@@ -68,11 +68,11 @@ jobs:
           
           # Build CLI
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 \
-          go build -ldflags "$LDFLAGS" -o dist/expe3000-$VERSION-${{ matrix.artifact_os }}-${{ matrix.artifact_arch }}-binary${{ matrix.extension }} ./cmd/expe3000
+          go build -ldflags "$LDFLAGS" -o dist/expe3000${{ matrix.extension }} ./cmd/expe3000
           
           # Build GUI
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 \
-          go build -ldflags "$LDFLAGS" -o dist/expe3000-gui-$VERSION-${{ matrix.artifact_os }}-${{ matrix.artifact_arch }}-binary${{ matrix.extension }} ./cmd/expe3000-gui
+          go build -ldflags "$LDFLAGS" -o dist/expe3000-gui${{ matrix.extension }} ./cmd/expe3000-gui
 
           # Package assets if they exist (optional, but good for a complete package)
           cp README.md dist/README.txt 2>/dev/null || true

@@ -89,8 +89,8 @@ func DefaultConfig() *Config {
 	return &Config{
 		OutputFile:    "results.csv",
 		FontSize:      50,
-		ScreenWidth:   1920,
-		ScreenHeight:  1080,
+		ScreenWidth:   1440,
+		ScreenHeight:  900,
 		ScaleFactor:   1.0,
 		UseFixation:   true,
 		VSync:         true,
