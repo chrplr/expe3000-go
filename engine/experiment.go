@@ -310,7 +310,13 @@ func (s *experimentState) checkStimulusOnset() (bool, int) {
 			if (stim.Type == StimVideo && s.resources[s.csIndex].Video != nil) || len(s.resources[s.csIndex].Textures) > 0 {
 				s.activeVisual = s.csIndex
 				s.visualStartNS = s.ctNS
-				s.visualEndNS = s.visualStartNS + uint64(stim.TotalDuration())*msToNS
+				
+				durMS := stim.TotalDuration()
+				if stim.Type == StimVideo && durMS == 0 {
+					v := s.resources[s.csIndex].Video
+					durMS = uint64(float64(v.Video.Header.FrameCount) / v.FPS * 1000.0)
+				}
+				s.visualEndNS = s.visualStartNS + durMS*msToNS
 				trig = true
 				if s.dlp != nil {
 					if stim.Type == StimImage || stim.Type == StimImageStream || stim.Type == StimVideo {
