@@ -305,13 +305,13 @@ func (s *experimentState) checkStimulusOnset() (bool, int) {
 		tidx := s.csIndex
 
 		switch stim.Type {
-		case StimImage, StimText, StimBox, StimImageStream, StimTextStream:
-			if len(s.resources[s.csIndex].Textures) > 0 {
+		case StimImage, StimText, StimBox, StimImageStream, StimTextStream, StimVideo:
+			if (stim.Type == StimVideo && s.resources[s.csIndex].Video != nil) || len(s.resources[s.csIndex].Textures) > 0 {
 				s.activeVisual = s.csIndex
 				s.visualEndNS = ^uint64(0) // Set to max to prevent immediate offset in checkVisualOffset
 				trig = true
 				if s.dlp != nil {
-					if stim.Type == StimImage || stim.Type == StimImageStream {
+					if stim.Type == StimImage || stim.Type == StimImageStream || stim.Type == StimVideo {
 						s.dlp.Set("1")
 					} else {
 						s.dlp.Set("3") // TEXT and BOX on line 3
@@ -422,6 +422,9 @@ func (s *experimentState) render() {
 
 		frameIdx := 0
 		showBlank := false
+		tex := (*sdl.Texture)(nil)
+		w, h := float32(0), float32(0)
+
 		if stim.Type == StimImageStream || stim.Type == StimTextStream {
 			totalDurationNS := uint64(stim.TotalDuration()) * msToNS
 			elapsedNS := s.ctNS - (s.visualEndNS - totalDurationNS)
@@ -432,13 +435,13 @@ func (s *experimentState) render() {
 			for i := 0; i < len(stim.FrameDurations); i++ {
 				durNS := stim.FrameDurations[i] * msToNS
 				gapNS := stim.FrameGaps[i] * msToNS
-				if elapsedNS < cumulNS + durNS {
+				if elapsedNS < cumulNS+durNS {
 					frameIdx = i
 					showBlank = false
 					break
 				}
 				cumulNS += durNS
-				if elapsedNS < cumulNS + gapNS {
+				if elapsedNS < cumulNS+gapNS {
 					frameIdx = i
 					showBlank = true
 					break
@@ -448,13 +451,62 @@ func (s *experimentState) render() {
 			if frameIdx == -1 {
 				frameIdx = len(r.Textures) - 1
 			}
+			if frameIdx < len(r.Textures) {
+				tex = r.Textures[frameIdx]
+				w = r.W[frameIdx]
+				h = r.H[frameIdx]
+			}
+		} else if stim.Type == StimVideo {
+			v := r.Video
+			if v != nil {
+				totalDurationNS := uint64(stim.DurationMS) * msToNS
+				elapsedNS := s.ctNS - (s.visualEndNS - totalDurationNS)
+				targetFrame := int(float64(elapsedNS) / 1e9 * v.FPS)
+
+				if targetFrame < 0 {
+					targetFrame = 0
+				}
+
+				// If we need to rewind (e.g. video reused or just started)
+				if targetFrame < v.LastFrame {
+					v.Stream.Rewind(0)
+					v.LastFrame = -1
+				}
+
+				// Catch up to target frame
+				decodedAny := false
+				for v.LastFrame < targetFrame {
+					frame, gotFrame, err := v.Stream.ReadVideoFrame()
+					if err != nil || !gotFrame {
+						break
+					}
+					v.LastFrame++
+					decodedAny = true
+					if v.LastFrame == targetFrame {
+						// Update texture with new frame
+						data := frame.Data()
+						pixels := v.Surface.Pixels()
+						copy(pixels, data)
+						v.Texture.Update(nil, pixels, int32(v.Surface.Pitch))
+					}
+				}
+
+				if v.LastFrame >= 0 {
+					tex = v.Texture
+					w = v.W
+					h = v.H
+				}
+				_ = decodedAny
+			}
+		} else {
+			if len(r.Textures) > 0 {
+				tex = r.Textures[0]
+				w = r.W[0]
+				h = r.H[0]
+			}
 		}
 
-		if !showBlank {
-			tex := r.Textures[frameIdx]
-			w := r.W[frameIdx]
-			h := r.H[frameIdx]
-
+		if tex != nil && !showBlank {
 			dr := sdl.FRect{
 				X: (float32(s.cfg.ScreenWidth) - (w * s.cfg.ScaleFactor)) / 2.0,
 				Y: (float32(s.cfg.ScreenHeight) - (h * s.cfg.ScaleFactor)) / 2.0,
@@ -462,7 +514,7 @@ func (s *experimentState) render() {
 				H: h * s.cfg.ScaleFactor,
 			}
 			s.renderer.RenderTexture(tex, nil, &dr)
-		} else if s.cfg.UseFixation {
+		} else if showBlank || (s.activeVisual != -1 && s.cfg.UseFixation) {
 			drawFixationCross(s.renderer, s.cfg.ScreenWidth, s.cfg.ScreenHeight, s.cfg.FixationColor)
 		}
 	} else if s.cfg.UseFixation {
@@ -547,6 +599,8 @@ func RunExperiment(cfg *Config, exp *Experiment, resources []Resource, renderer 
 				stype = "IMAGE_STREAM_ONSET"
 			case StimTextStream:
 				stype = "TEXT_STREAM_ONSET"
+			case StimVideo:
+				stype = "VIDEO_ONSET"
 			}
 			state.log.Log(stim.TimestampMS, otNS/msToNS, stype, label, stim.RawRow)
 

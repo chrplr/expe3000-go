@@ -219,6 +219,9 @@ func LoadExperiment(path string) (*Experiment, error) {
 			// Convert literal "\n" to actual newlines
 			content := strings.ReplaceAll(stimRaw, "\\n", "\n")
 			filePaths = []string{content}
+		case "video":
+			stype = StimVideo
+			filePaths = []string{stimRaw}
 		default:
 			return nil, fmt.Errorf("line %d: unknown stimulus type: %s", i+1, record[idxType])
 		}

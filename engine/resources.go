@@ -10,6 +10,7 @@ import (
 	"github.com/Zyko0/go-sdl3/img"
 	"github.com/Zyko0/go-sdl3/sdl"
 	"github.com/Zyko0/go-sdl3/ttf"
+	"github.com/zergon321/reisen"
 )
 
 func GetDefaultFontPath() string {
@@ -49,16 +50,28 @@ func GetDefaultFontPath() string {
 	return ""
 }
 
+type VideoResource struct {
+	Media     *reisen.Media
+	Stream    *reisen.VideoStream
+	Texture   *sdl.Texture
+	Surface   *sdl.Surface // Reusable surface for frame conversion
+	FPS       float64
+	W, H      float32
+	LastFrame int // Index of last decoded frame
+}
+
 type Resource struct {
 	Textures []*sdl.Texture
 	W, H     []float32
 	Sounds   []SoundResource
+	Video    *VideoResource
 }
 
 type CacheEntry struct {
 	Texture *sdl.Texture
 	W, H    float32
 	Sound   SoundResource
+	Video   *VideoResource
 }
 
 type ResourceCache struct {
@@ -103,6 +116,9 @@ func (c *ResourceCache) Load(renderer *sdl.Renderer, exp *Experiment, font *ttf.
 				}
 				if assetType == StimSound && entry.Sound.Data != nil {
 					resources[i].Sounds = append(resources[i].Sounds, entry.Sound)
+				}
+				if assetType == StimVideo && entry.Video != nil {
+					resources[i].Video = entry.Video
 				}
 				continue
 			}
@@ -179,6 +195,63 @@ func (c *ResourceCache) Load(renderer *sdl.Renderer, exp *Experiment, font *ttf.
 				} else {
 					return nil, fmt.Errorf("cannot render box stimulus (no font loaded)")
 				}
+			case StimVideo:
+				m, err := reisen.NewMedia(fullPath)
+				if err != nil {
+					return nil, fmt.Errorf("failed to open video %s: %v", fullPath, err)
+				}
+
+				err = m.OpenDecode()
+				if err != nil {
+					m.Close()
+					return nil, fmt.Errorf("failed to open media for decoding %s: %v", fullPath, err)
+				}
+
+				videoStreams := m.VideoStreams()
+				if len(videoStreams) == 0 {
+					m.Close()
+					return nil, fmt.Errorf("no video streams found in %s", fullPath)
+				}
+				vs := videoStreams[0]
+				// Open the stream with its original width and height
+				err = vs.OpenDecode(vs.Width(), vs.Height(), reisen.InterpolationFastBilinear)
+				if err != nil {
+					m.Close()
+					return nil, fmt.Errorf("failed to open video stream in %s: %v", fullPath, err)
+				}
+
+				fps, _ := vs.FrameRate()
+				if fps == 0 {
+					fps = 30 // Default fallback
+				}
+
+				w, h := vs.Width(), vs.Height()
+				tex, err := renderer.CreateTexture(sdl.PIXELFORMAT_RGBA32, sdl.TEXTUREACCESS_STREAMING, w, h)
+				if err != nil {
+					vs.Close()
+					m.Close()
+					return nil, fmt.Errorf("failed to create streaming texture for video: %v", err)
+				}
+
+				surf, err := sdl.CreateSurface(w, h, sdl.PIXELFORMAT_RGBA32)
+				if err != nil {
+					tex.Destroy()
+					vs.Close()
+					m.Close()
+					return nil, fmt.Errorf("failed to create surface for video: %v", err)
+				}
+
+				vr := &VideoResource{
+					Media:     m,
+					Stream:    vs,
+					Texture:   tex,
+					Surface:   surf,
+					FPS:       float64(fps),
+					W:         float32(w),
+					H:         float32(h),
+					LastFrame: -1,
+				}
+				entry.Video = vr
 			}
 
 			c.entries[key] = entry
@@ -190,6 +263,9 @@ func (c *ResourceCache) Load(renderer *sdl.Renderer, exp *Experiment, font *ttf.
 			if assetType == StimSound {
 				resources[i].Sounds = append(resources[i].Sounds, entry.Sound)
 			}
+			if assetType == StimVideo {
+				resources[i].Video = entry.Video
+			}
 		}
 	}
 
@@ -200,6 +276,21 @@ func (c *ResourceCache) Destroy() {
 	for _, entry := range c.entries {
 		if entry.Texture != nil {
 			entry.Texture.Destroy()
+		}
+		if entry.Video != nil {
+			if entry.Video.Texture != nil {
+				entry.Video.Texture.Destroy()
+			}
+			if entry.Video.Surface != nil {
+				entry.Video.Surface.Destroy()
+			}
+			if entry.Video.Stream != nil {
+				entry.Video.Stream.Close()
+			}
+			if entry.Video.Media != nil {
+				entry.Video.Media.CloseDecode()
+				entry.Video.Media.Close()
+			}
 		}
 		// Clear sound data reference to allow GC to collect if it's a Go slice
 		// Note: go-sdl3's LoadWAV currently returns a Go-allocated or copied slice

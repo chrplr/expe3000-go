@@ -42,7 +42,7 @@ func ValidateExperiment(exp *Experiment, stimuliDir string) []error {
 		}
 
 		// Resource checks
-		if stim.Type == StimImage || stim.Type == StimSound || stim.Type == StimImageStream || stim.Type == StimSoundStream {
+		if stim.Type == StimImage || stim.Type == StimSound || stim.Type == StimImageStream || stim.Type == StimSoundStream || stim.Type == StimVideo {
 			if len(stim.FilePaths) == 0 || (len(stim.FilePaths) == 1 && stim.FilePaths[0] == "") {
 				errors = append(errors, fmt.Errorf("stimulus %d (at %dms): missing file path(s)", i+1, stim.TimestampMS))
 			}
@@ -70,8 +70,8 @@ func ValidateExperiment(exp *Experiment, stimuliDir string) []error {
 			}
 		}
 
-		// Overlap checks for visual stimuli (Image, Text, Box, Streams)
-		isVisual := (stim.Type == StimImage || stim.Type == StimText || stim.Type == StimBox || stim.Type == StimImageStream || stim.Type == StimTextStream)
+		// Overlap checks for visual stimuli (Image, Text, Box, Streams, Video)
+		isVisual := (stim.Type == StimImage || stim.Type == StimText || stim.Type == StimBox || stim.Type == StimImageStream || stim.Type == StimTextStream || stim.Type == StimVideo)
 		if isVisual {
 			var duration uint64
 			if stim.Type == StimImageStream || stim.Type == StimTextStream {

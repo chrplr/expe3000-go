@@ -10,6 +10,7 @@ const (
 	StimTextStream
 	StimSoundStream
 	StimBox
+	StimVideo
 	StimEnd
 )
 
@@ -29,6 +30,8 @@ func (t StimType) String() string {
 		return "SOUND_STREAM"
 	case StimBox:
 		return "BOX"
+	case StimVideo:
+		return "VIDEO"
 	case StimEnd:
 		return "END"
 	default:

@@ -224,7 +224,7 @@ func RunGuiSetup(cfg *Config) bool {
 						if my >= by && my <= by+BoxH {
 							switch i {
 							case 1:
-								filters := []sdl.DialogFileFilter{{Name: "CSV Files", Pattern: "csv"}}
+								filters := []sdl.DialogFileFilter{{Name: "Experiment Files (CSV/TSV)", Pattern: "csv;tsv"}}
 								cb := sdl.NewDialogFileCallback(func(fileList []string, filter int32) {
 									if len(fileList) > 0 {
 										cfg.CSVFile = fileList[0]
