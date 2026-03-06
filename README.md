@@ -15,7 +15,7 @@ Stimuli are presented according to a fixed, predefined schedule. Although keypre
 
 ## Experiment Configuration (CSV)
 
-The input CSVi or TSV file must include at least these four columns in its header: `onset_time`, `duration`, `type`, and `stimuli`. Extra columns (like `cond`) are allowed and will be preserved in the output log.
+The input CSV or TSV file must include at least these four columns in its header: `onset_time`, `duration`, `type`, and `stimuli`. Extra columns (like `cond`) are allowed and will be preserved in the output log.
 
 **Example (`experiment.csv`):**
 ```csv
