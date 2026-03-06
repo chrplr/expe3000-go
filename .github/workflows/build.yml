@@ -164,7 +164,7 @@ jobs:
           name: installer-linux-${{ matrix.arch }}
           path: |
             *.deb
-            *.AppImage
+            expe3000-*.AppImage
 
   package-windows:
     name: Package Windows (x86_64)
