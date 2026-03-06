@@ -97,7 +97,7 @@ jobs:
             appimage_arch: x86_64
           - arch: arm64
             deb_arch: arm64
-            appimage_arch: aarch64
+            appimage_arch: arm64
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -106,7 +106,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y desktop-file-utils
+          sudo apt-get install -y desktop-file-utils file
       - name: Download Linux Binaries
         uses: actions/download-artifact@v4
         with:
@@ -143,6 +143,9 @@ jobs:
           cp expe3000.desktop AppDir/
           cp gui.png AppDir/expe3000.png
           
+          # Verify binary architecture
+          file AppDir/usr/bin/expe3000-gui
+
           cat <<'EOF' > AppDir/AppRun
           #!/bin/sh
           SELF=$(readlink -f "$0")
@@ -157,10 +160,9 @@ jobs:
           chmod +x appimagetool-x86_64.AppImage
           ./appimagetool-x86_64.AppImage --appimage-extract
           
-          # Run the extracted tool DIRECTLY with ARCH exported
-          export ARCH=${{ matrix.appimage_arch }}
-          echo "Packaging for ARCH: $ARCH"
-          ./squashfs-root/usr/bin/appimagetool AppDir expe3000-${{ matrix.arch }}.AppImage
+          # Run the extracted tool with ARCH environment variable prefixed directly
+          echo "Building AppImage for architecture: ${{ matrix.appimage_arch }}"
+          env ARCH=${{ matrix.appimage_arch }} ./squashfs-root/usr/bin/appimagetool AppDir expe3000-${{ matrix.arch }}.AppImage
       - name: Upload Linux Packages
         uses: actions/upload-artifact@v4
         with:
