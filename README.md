@@ -85,6 +85,38 @@ go build -o expe3000 ./cmd/expe3000
 go build -o expe3000-gui ./cmd/expe3000-gui
 ```
 
+### Making the commands available from anywhere (Optional)
+
+To run `expe3000` or `expe3000-gui` from any terminal window without typing their full path, you can move them to a "global" location on your computer.
+
+#### Linux & macOS
+1. Open a terminal in the folder where your binaries are located.
+2. Move the files to a standard system folder (you will be asked for your password):
+   ```bash
+   sudo mv expe3000 expe3000-gui /usr/local/bin/
+   ```
+3. **macOS Security Note**: If you downloaded the binaries, macOS may block them from running. You can fix this by running this command in the terminal:
+   ```bash
+   sudo xattr -dr com.apple.quarantine /usr/local/bin/expe3000*
+   ```
+   *Alternatively, if you see a "blocked" message when trying to run the app, go to **System Settings > Privacy & Security** and click **"Open Anyway"** at the bottom of the page.*
+4. You can now start the program from any folder by simply typing `expe3000` or `expe3000-gui`.
+
+#### Windows
+**Option A: Automate with PowerShell (Recommended)**
+1. Open the folder where you have downloaded the `.exe` files and `install-windows.ps1`.
+2. Right-click on **`install-windows.ps1`** and select **Run with PowerShell**. 
+3. If prompted to run as **Administrator**, click **Yes**. The script will automatically copy the files to `C:\Program Files\expe3000-go` and update your system `PATH`.
+
+**Option B: Manual Setup**
+1. Create a folder (e.g., `C:\bin`) and move the `.exe` files into it.
+2. Press the **Windows Key**, type "environment variables", and select **Edit the system environment variables**.
+3. Click the **Environment Variables...** button.
+4. In the "User variables" list, select **Path**, then click **Edit...**.
+5. Click **New** and type the path to your folder (e.g., `C:\bin`).
+6. Click **OK** on all windows to save.
+7. Restart any open Command Prompt or PowerShell windows for the changes to take effect.
+
 ---
 
 ## Usage
