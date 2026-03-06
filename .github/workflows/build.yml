@@ -57,7 +57,7 @@ jobs:
         run: |
           mkdir -p dist
           
-          # Get version info similar to build.sh
+          # Get version info
           VERSION=$(git describe --tags --always 2>/dev/null || echo "dev")
           COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
           BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -66,23 +66,21 @@ jobs:
                    -X 'expe3000/internal/version.GitCommit=$COMMIT' \
                    -X 'expe3000/internal/version.BuildTime=$BUILD_TIME'"
           
-          # Build CLI
+          # Build CLI & GUI
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 \
           go build -ldflags "$LDFLAGS" -o dist/expe3000${{ matrix.extension }} ./cmd/expe3000
           
-          # Build GUI
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 \
           go build -ldflags "$LDFLAGS" -o dist/expe3000-gui${{ matrix.extension }} ./cmd/expe3000-gui
 
-          # Package assets if they exist (optional, but good for a complete package)
-          cp README.md dist/README.txt 2>/dev/null || true
-          cp experiment.csv dist/ 2>/dev/null || true
-          if [ -d "assets" ]; then cp -r assets dist/; fi
-
-          # Create archives with a parent folder
+          # Package raw binaries for this OS/Arch
           ARCHIVE_NAME=expe3000-$VERSION-${{ matrix.artifact_os }}-${{ matrix.artifact_arch }}-binary
-          mkdir $ARCHIVE_NAME
-          cp -r dist/* $ARCHIVE_NAME/
+          mkdir -p $ARCHIVE_NAME
+          cp dist/expe3000${{ matrix.extension }} $ARCHIVE_NAME/
+          cp dist/expe3000-gui${{ matrix.extension }} $ARCHIVE_NAME/
+          cp README.md $ARCHIVE_NAME/README.txt 2>/dev/null || true
+          cp experiment.csv $ARCHIVE_NAME/ 2>/dev/null || true
+          if [ -d "assets" ]; then cp -r assets $ARCHIVE_NAME/; fi
           
           if [ "${{ matrix.goos }}" == "windows" ]; then
             zip -r $ARCHIVE_NAME.zip $ARCHIVE_NAME
@@ -90,15 +88,125 @@ jobs:
             tar -czvf $ARCHIVE_NAME.tar.gz $ARCHIVE_NAME
           fi
 
-      - name: Upload Artifacts
+      - name: Upload Binary Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: expe3000-${{ matrix.artifact_os }}-${{ matrix.artifact_arch }}-binary
+          name: bin-${{ matrix.artifact_os }}-${{ matrix.artifact_arch }}
           path: expe3000-*.*
+
+  package-linux:
+    name: Package Linux (x86_64)
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Download Linux x86_64 Binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: bin-linux-x86_64
+          path: build_tmp
+      - name: Create Linux Packages
+        run: |
+          # 1. Preparation
+          VERSION=$(git describe --tags --always 2>/dev/null || echo "dev")
+          bin_dir=$(ls -d build_tmp/expe3000-*)
+          
+          # 2. Build .deb package
+          mkdir -p deb/usr/local/bin deb/DEBIAN
+          cp "$bin_dir"/expe3000* deb/usr/local/bin/
+          cat <<EOF > deb/DEBIAN/control
+          Package: expe3000
+          Version: ${VERSION#v}
+          Architecture: amd64
+          Maintainer: Christophe Pallier <christophe@pallier.org>
+          Description: Multimedia stimulus delivery system for neuroscience and psychology.
+          EOF
+          dpkg-deb --build deb expe3000_${VERSION}_amd64.deb
+
+          # 3. Build AppImage
+          mkdir -p AppDir/usr/bin
+          cp "$bin_dir"/expe3000* AppDir/usr/bin/
+          cp expe3000.desktop AppDir/
+          cp gui.png AppDir/expe3000.png
+          
+          # Create AppRun (required script to start the GUI by default)
+          echo -e '#!/bin/sh\nexec "$APPDIR/usr/bin/expe3000-gui" "$@"' > AppDir/AppRun
+          chmod +x AppDir/AppRun
+          
+          # Download and use appimagetool
+          curl -LO https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+          ARCH=x86_64 ./appimagetool-x86_64.AppImage AppDir expe3000-x86_64.AppImage
+      - name: Upload Linux Packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-linux
+          path: |
+            *.deb
+            *.AppImage
+
+  package-windows:
+    name: Package Windows (x86_64)
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Download Windows x86_64 Binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: bin-windows-x86_64
+          path: build_tmp
+      - name: Create Installer
+        shell: pwsh
+        run: |
+          $bin_dir = Get-ChildItem -Directory build_tmp | Select-Object -First 1
+          Copy-Item "$($bin_dir.FullName)\*" . -Recurse -Force
+          makensis installer.nsi
+      - name: Upload Windows Installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-windows
+          path: expe3000-setup.exe
+
+  package-macos:
+    name: Package macOS (Universal/arm64)
+    needs: build
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Download macOS arm64 Binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: bin-macos-arm64
+          path: build_tmp
+      - name: Create DMG
+        run: |
+          brew install create-dmg
+          mkdir -p dist_dmg
+          bin_dir=$(ls -d build_tmp/expe3000-*)
+          cp -r "$bin_dir"/* dist_dmg/
+          create-dmg \
+            --volname "expe3000-go" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --icon "expe3000-gui" 200 190 \
+            --hide-extension "expe3000-gui" \
+            --app-drop-link 600 185 \
+            "expe3000-macos-installer.dmg" \
+            "dist_dmg/"
+      - name: Upload macOS DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-macos
+          path: expe3000-macos-installer.dmg
 
   release:
     name: Create Release
-    needs: build
+    needs: [build, package-windows, package-macos, package-linux]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -107,12 +215,17 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: artifacts
-          pattern: expe3000-*
+          path: release_artifacts
           merge-multiple: true
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/expe3000-*.*
+          files: |
+            release_artifacts/expe3000-*.zip
+            release_artifacts/expe3000-*.tar.gz
+            release_artifacts/expe3000-setup.exe
+            release_artifacts/expe3000-macos-installer.dmg
+            release_artifacts/*.deb
+            release_artifacts/*.AppImage
           generate_release_notes: true

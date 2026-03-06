@@ -10,6 +10,25 @@ Expe3000-go is a multimedia stimulus delivery system designed for experimental p
 
 **Building and running an experiment with expe3000 does not require any programming!** The experiment is fully described in a tabular text file (`.csv` or `.tsv`) that specifies the timings of stimuli.
 
+---
+
+## Table of Contents
+- [Experiment Configuration (CSV)](#experiment-configuration-csv)
+  - [Stimulus Types](#stimulus-types)
+- [Features](#features)
+- [Installation](#installation)
+  - [Precompiled Binaries (Recommended)](#precompiled-binaries-recommended)
+    - [Making the commands available from anywhere (Optional)](#making-the-commands-available-from-anywhere-optional)
+  - [Building from Source](#building-from-source)
+- [Usage](#usage)
+  - [Quick Start](#quick-start)
+  - [GUI Mode](#gui-mode)
+  - [CLI Mode](#cli-mode)
+  - [Linux Performance Note](#linux-performance-note)
+- [License & Credits](#license--credits)
+
+---
+
 Stimuli are presented according to a fixed, predefined schedule. Although keypress events are saved with a timestamp, the behavior of the program cannot be modified in real-time (e.g., immediate feedback). There is no notion of "trial" and all button presses are recorded. This approach is suitable for fMRI/MEG/EEG experiments with rigid stimulus presentation schedules.
 *Note: If these constraints don't suit your needs and you're looking for a general Go library for psychology experiments, check out [goxpyriment](https://chrplr.github.io/goxpyriment).*
 
@@ -62,11 +81,54 @@ onset_time,duration,type,stimuli
 
 ## Installation
 
-### Precompiled Binaries
-Check the [GitHub Releases](https://github.com/chrplr/expe3000-go/releases) for automated builds.
-Artifacts are named `expe3000-<version>-<os>-<arch>-binary`. Choose the one matching your system:
-- **OS**: `linux`, `windows`, or `macos`.
-- **Architecture**: `x86_64` (Intel/AMD) or `arm64` (Apple Silicon/ARM).
+### Precompiled Binaries (Recommended)
+
+If you just want to run the application, the easiest way is to download a pre-built version for your computer.
+
+1.  **Download:** Go to the [GitHub Releases](https://github.com/chrplr/expe3000-go/releases) page.
+2.  **Choose your installer (Easiest):**
+    -   **Windows:** Download **`expe3000-setup.exe`**. Run it to install the app with a guided wizard and create desktop shortcuts.
+    -   **macOS:** Download **`expe3000-macos-installer.dmg`**. Open it and drag the app to your Applications folder.
+    -   **Linux (Universal):** Download **`expe3000-x86_64.AppImage`**. Right-click the file, go to **Properties > Permissions**, check **"Allow executing file as program"**, and double-click to run.
+    -   **Ubuntu/Debian:** Download the **`.deb`** file and install it by double-clicking or running `sudo apt install ./expe3000_*.deb`.
+3.  **Alternative: Raw Binaries:** If you prefer not to use an installer, you can download the `.zip` (Windows) or `.tar.gz` (Linux/macOS) files matching your processor:
+    -   **Windows:** `windows` and `x86_64`.
+    -   **macOS (Apple Silicon/M1/M2):** `macos` and `arm64`.
+    -   **macOS (Intel):** `macos` and `x86_64`.
+    -   **Linux:** `linux` and `x86_64`.
+4.  **Run:** Once installed or downloaded, you can run the application (you may need to grant permission in your security settings on macOS).
+
+#### Making the commands available from anywhere (Optional)
+
+To run `expe3000` or `expe3000-gui` from any terminal window without typing their full path, you can move them to a "global" location on your computer.
+
+##### Linux & macOS
+1. Open a terminal in the folder where your binaries are located.
+2. Move the files to a standard system folder (you will be asked for your password):
+   ```bash
+   sudo mv expe3000 expe3000-gui /usr/local/bin/
+   ```
+3. **macOS Security Note**: If you downloaded the binaries, macOS may block them from running. You can fix this by running this command in the terminal:
+   ```bash
+   sudo xattr -dr com.apple.quarantine /usr/local/bin/expe3000*
+   ```
+   *Alternatively, if you see a "blocked" message when trying to run the app, go to **System Settings > Privacy & Security** and click **"Open Anyway"** at the bottom of the page.*
+4. You can now start the program from any folder by simply typing `expe3000` or `expe3000-gui`.
+
+##### Windows
+**Option A: Automate with PowerShell (Recommended)**
+1. Open the folder where you have downloaded the `.exe` files and `install-windows.ps1`.
+2. Right-click on **`install-windows.ps1`** and select **Run with PowerShell**. 
+3. If prompted to run as **Administrator**, click **Yes**. The script will automatically copy the files to `C:\Program Files\expe3000-go` and update your system `PATH`.
+
+**Option B: Manual Setup**
+1. Create a folder (e.g., `C:\bin`) and move the `.exe` files into it.
+2. Press the **Windows Key**, type "environment variables", and select **Edit the system environment variables**.
+3. Click the **Environment Variables...** button.
+4. In the "User variables" list, select **Path**, then click **Edit...**.
+5. Click **New** and type the path to your folder (e.g., `C:\bin`).
+6. Click **OK** on all windows to save.
+7. Restart any open Command Prompt or PowerShell windows for the changes to take effect.
 
 ### Building from Source
 
@@ -87,38 +149,6 @@ Alternatively:
 go build -o expe3000 ./cmd/expe3000
 go build -o expe3000-gui ./cmd/expe3000-gui
 ```
-
-### Making the commands available from anywhere (Optional)
-
-To run `expe3000` or `expe3000-gui` from any terminal window without typing their full path, you can move them to a "global" location on your computer.
-
-#### Linux & macOS
-1. Open a terminal in the folder where your binaries are located.
-2. Move the files to a standard system folder (you will be asked for your password):
-   ```bash
-   sudo mv expe3000 expe3000-gui /usr/local/bin/
-   ```
-3. **macOS Security Note**: If you downloaded the binaries, macOS may block them from running. You can fix this by running this command in the terminal:
-   ```bash
-   sudo xattr -dr com.apple.quarantine /usr/local/bin/expe3000*
-   ```
-   *Alternatively, if you see a "blocked" message when trying to run the app, go to **System Settings > Privacy & Security** and click **"Open Anyway"** at the bottom of the page.*
-4. You can now start the program from any folder by simply typing `expe3000` or `expe3000-gui`.
-
-#### Windows
-**Option A: Automate with PowerShell (Recommended)**
-1. Open the folder where you have downloaded the `.exe` files and `install-windows.ps1`.
-2. Right-click on **`install-windows.ps1`** and select **Run with PowerShell**. 
-3. If prompted to run as **Administrator**, click **Yes**. The script will automatically copy the files to `C:\Program Files\expe3000-go` and update your system `PATH`.
-
-**Option B: Manual Setup**
-1. Create a folder (e.g., `C:\bin`) and move the `.exe` files into it.
-2. Press the **Windows Key**, type "environment variables", and select **Edit the system environment variables**.
-3. Click the **Environment Variables...** button.
-4. In the "User variables" list, select **Path**, then click **Edit...**.
-5. Click **New** and type the path to your folder (e.g., `C:\bin`).
-6. Click **OK** on all windows to save.
-7. Restart any open Command Prompt or PowerShell windows for the changes to take effect.
 
 ---
 
