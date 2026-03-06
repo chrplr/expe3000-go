@@ -93,8 +93,10 @@ jobs:
         include:
           - arch: x86_64
             deb_arch: amd64
+            appimage_arch: x86_64
           - arch: arm64
             deb_arch: arm64
+            appimage_arch: aarch64
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -133,9 +135,9 @@ jobs:
           # Download and use appimagetool
           curl -LO https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage
-          # Export ARCH before running appimagetool
-          export ARCH=${{ matrix.arch }}
-          ./appimagetool-x86_64.AppImage --appimage-extract-and-run AppDir expe3000-${{ matrix.arch }}.AppImage
+          
+          # Provide ARCH on the same line to be absolutely sure
+          ARCH=${{ matrix.appimage_arch }} ./appimagetool-x86_64.AppImage --appimage-extract-and-run AppDir expe3000-${{ matrix.arch }}.AppImage
       - name: Upload Linux Packages
         uses: actions/upload-artifact@v4
         with:
