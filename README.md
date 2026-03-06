@@ -2,6 +2,8 @@
 
 HTML version of this file: <http://chrplr.github.io/expe3000-go>
 
+Github repository: <http://github.com/chrplr/expe3000-go>
+
 Author: Christophe Pallier <christophe@pallier.org>
 
 Expe3000-go is multimedia stimulus delivery system designed for experimental psychology and neuroscience tasks requiring accurate timing and low-latency audio.
