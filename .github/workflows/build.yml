@@ -106,7 +106,10 @@ jobs:
           name: bin-linux-${{ matrix.arch }}
           path: build_tmp
       - name: Create Linux Packages
+        env:
+          ARCH: ${{ matrix.appimage_arch }}
         run: |
+          echo "Building AppImage for architecture: $ARCH"
           VERSION=$(git describe --tags --always 2>/dev/null || echo "dev")
           bin_dir=$(find build_tmp -maxdepth 1 -type d -name "expe3000-*" | head -n 1)
           
@@ -136,8 +139,7 @@ jobs:
           curl -LO https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage
           
-          # Provide ARCH on the same line to be absolutely sure
-          ARCH=${{ matrix.appimage_arch }} ./appimagetool-x86_64.AppImage --appimage-extract-and-run AppDir expe3000-${{ matrix.arch }}.AppImage
+          ./appimagetool-x86_64.AppImage --appimage-extract-and-run AppDir expe3000-${{ matrix.arch }}.AppImage
       - name: Upload Linux Packages
         uses: actions/upload-artifact@v4
         with:
