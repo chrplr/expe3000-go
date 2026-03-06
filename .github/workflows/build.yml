@@ -56,24 +56,14 @@ jobs:
       - name: Build
         run: |
           mkdir -p dist
-          
-          # Get version info
           VERSION=$(git describe --tags --always 2>/dev/null || echo "dev")
           COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
           BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          LDFLAGS="-X 'expe3000/internal/version.Version=$VERSION' -X 'expe3000/internal/version.GitCommit=$COMMIT' -X 'expe3000/internal/version.BuildTime=$BUILD_TIME'"
           
-          LDFLAGS="-X 'expe3000/internal/version.Version=$VERSION' \
-                   -X 'expe3000/internal/version.GitCommit=$COMMIT' \
-                   -X 'expe3000/internal/version.BuildTime=$BUILD_TIME'"
-          
-          # Build CLI & GUI
-          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 \
-          go build -ldflags "$LDFLAGS" -o dist/expe3000${{ matrix.extension }} ./cmd/expe3000
-          
-          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 \
-          go build -ldflags "$LDFLAGS" -o dist/expe3000-gui${{ matrix.extension }} ./cmd/expe3000-gui
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 go build -ldflags "$LDFLAGS" -o dist/expe3000${{ matrix.extension }} ./cmd/expe3000
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 go build -ldflags "$LDFLAGS" -o dist/expe3000-gui${{ matrix.extension }} ./cmd/expe3000-gui
 
-          # Package raw binaries for this OS/Arch
           ARCHIVE_NAME=expe3000-$VERSION-${{ matrix.artifact_os }}-${{ matrix.artifact_arch }}-binary
           mkdir -p $ARCHIVE_NAME
           cp dist/expe3000${{ matrix.extension }} $ARCHIVE_NAME/
@@ -108,13 +98,13 @@ jobs:
           path: build_tmp
       - name: Create Linux Packages
         run: |
-          # 1. Preparation
           VERSION=$(git describe --tags --always 2>/dev/null || echo "dev")
-          bin_dir=$(ls -d build_tmp/expe3000-*)
+          bin_dir=$(find build_tmp -maxdepth 1 -type d -name "expe3000-*" | head -n 1)
           
-          # 2. Build .deb package
-          mkdir -p deb/usr/local/bin deb/DEBIAN
+          mkdir -p deb/usr/local/bin deb/usr/share/applications deb/usr/share/pixmaps deb/DEBIAN
           cp "$bin_dir"/expe3000* deb/usr/local/bin/
+          cp expe3000.desktop deb/usr/share/applications/
+          cp gui.png deb/usr/share/pixmaps/expe3000.png
           cat <<EOF > deb/DEBIAN/control
           Package: expe3000
           Version: ${VERSION#v}
@@ -124,20 +114,16 @@ jobs:
           EOF
           dpkg-deb --build deb expe3000_${VERSION}_amd64.deb
 
-          # 3. Build AppImage
           mkdir -p AppDir/usr/bin
           cp "$bin_dir"/expe3000* AppDir/usr/bin/
           cp expe3000.desktop AppDir/
           cp gui.png AppDir/expe3000.png
-          
-          # Create AppRun (required script to start the GUI by default)
           echo -e '#!/bin/sh\nexec "$APPDIR/usr/bin/expe3000-gui" "$@"' > AppDir/AppRun
           chmod +x AppDir/AppRun
           
-          # Download and use appimagetool
           curl -LO https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage
-          ARCH=x86_64 ./appimagetool-x86_64.AppImage AppDir expe3000-x86_64.AppImage
+          ARCH=x86_64 ./appimagetool-x86_64.AppImage --appimage-extract-and-run AppDir expe3000-x86_64.AppImage
       - name: Upload Linux Packages
         uses: actions/upload-artifact@v4
         with:
@@ -158,12 +144,15 @@ jobs:
         with:
           name: bin-windows-x86_64
           path: build_tmp
+      - name: Install NSIS
+        run: choco install nsis -y
       - name: Create Installer
         shell: pwsh
         run: |
-          $bin_dir = Get-ChildItem -Directory build_tmp | Select-Object -First 1
+          $bin_dir = Get-ChildItem -Path build_tmp -Directory | Select-Object -First 1
           Copy-Item "$($bin_dir.FullName)\*" . -Recurse -Force
-          makensis installer.nsi
+          # Use the full path to makensis if it's not in the PATH immediately
+          & "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
       - name: Upload Windows Installer
         uses: actions/upload-artifact@v4
         with:
@@ -186,7 +175,7 @@ jobs:
         run: |
           brew install create-dmg
           mkdir -p dist_dmg
-          bin_dir=$(ls -d build_tmp/expe3000-*)
+          bin_dir=$(find build_tmp -maxdepth 1 -type d -name "expe3000-*" | head -n 1)
           cp -r "$bin_dir"/* dist_dmg/
           create-dmg \
             --volname "expe3000-go" \
@@ -217,7 +206,6 @@ jobs:
         with:
           path: release_artifacts
           merge-multiple: true
-
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:

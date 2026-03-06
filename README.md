@@ -1,8 +1,6 @@
 # expe3000 (Go Version)
 
-HTML version of this file: <http://chrplr.github.io/expe3000-go>
-
-Github repository: <http://github.com/chrplr/expe3000-go>
+[HTML version](http://chrplr.github.io/expe3000-go) | [Github repository](http://github.com/chrplr/expe3000-go)
 
 Author: Christophe Pallier <christophe@pallier.org>
 
@@ -98,6 +96,29 @@ If you just want to run the application, the easiest way is to download a pre-bu
     -   **Linux:** `linux` and `x86_64`.
 4.  **Run:** Once installed or downloaded, you can run the application (you may need to grant permission in your security settings on macOS).
 
+### Building from Source
+
+Do this only if you want to compile the project on your computer. This is the way to go if you want to debug and/or add new functions to the rograms.
+
+
+#### Prerequisites
+- **Go 1.25** or later (only if building from source).
+- **SDL3 libraries**: 
+  - **Windows**: DLLs are typically bundled with releases.
+  - **macOS**: `brew install sdl3 sdl3_image sdl3_ttf`
+  - **Linux**: Install `sdl3`, `sdl3_image`, and `sdl3_ttf` via your package manager (e.g., `apt install libsdl3-0 libsdl3-image-0 libsdl3-ttf-0`).
+
+
+To build both the CLI and GUI versions:
+```bash
+./build.sh
+```
+Alternatively:
+```bash
+go build -o expe3000 ./cmd/expe3000
+go build -o expe3000-gui ./cmd/expe3000-gui
+```
+
 #### Making the commands available from anywhere (Optional)
 
 To run `expe3000` or `expe3000-gui` from any terminal window without typing their full path, you can move them to a "global" location on your computer.
@@ -130,25 +151,6 @@ To run `expe3000` or `expe3000-gui` from any terminal window without typing thei
 6. Click **OK** on all windows to save.
 7. Restart any open Command Prompt or PowerShell windows for the changes to take effect.
 
-### Building from Source
-
-#### Prerequisites
-- **Go 1.25** or later (only if building from source).
-- **SDL3 libraries**: 
-  - **Windows**: DLLs are typically bundled with releases.
-  - **macOS**: `brew install sdl3 sdl3_image sdl3_ttf`
-  - **Linux**: Install `sdl3`, `sdl3_image`, and `sdl3_ttf` via your package manager (e.g., `apt install libsdl3-0 libsdl3-image-0 libsdl3-ttf-0`).
-
-
-To build both the CLI and GUI versions:
-```bash
-./build.sh
-```
-Alternatively:
-```bash
-go build -o expe3000 ./cmd/expe3000
-go build -o expe3000-gui ./cmd/expe3000-gui
-```
 
 ---
 
