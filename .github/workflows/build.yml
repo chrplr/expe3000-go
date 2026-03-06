@@ -127,19 +127,21 @@ jobs:
           EOF
           dpkg-deb --build deb expe3000_${VERSION}_${{ matrix.deb_arch }}.deb
 
-          # AppImage
+          # AppImage preparation
           mkdir -p AppDir/usr/bin
           cp "$bin_dir"/expe3000* AppDir/usr/bin/
           cp expe3000.desktop AppDir/
           cp gui.png AppDir/expe3000.png
-          echo -e '#!/bin/sh\nexec "\$APPDIR/usr/bin/expe3000-gui" "\$@"' > AppDir/AppRun
+          echo -e '#!/bin/sh\nexec "$APPDIR/usr/bin/expe3000-gui" "$@"' > AppDir/AppRun
           chmod +x AppDir/AppRun
           
-          # Download and use appimagetool
+          # Download and extract appimagetool to avoid FUSE issues
           curl -LO https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage
+          ./appimagetool-x86_64.AppImage --appimage-extract
           
-          ./appimagetool-x86_64.AppImage --appimage-extract-and-run AppDir expe3000-${{ matrix.arch }}.AppImage
+          # Run the extracted tool with ARCH environment variable
+          ARCH=${{ matrix.appimage_arch }} ./squashfs-root/AppRun AppDir expe3000-${{ matrix.arch }}.AppImage
       - name: Upload Linux Packages
         uses: actions/upload-artifact@v4
         with:
