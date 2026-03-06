@@ -130,10 +130,12 @@ jobs:
           echo -e '#!/bin/sh\nexec "\$APPDIR/usr/bin/expe3000-gui" "\$@"' > AppDir/AppRun
           chmod +x AppDir/AppRun
           
-          # Use "continuous" release which is the standard way to download appimagetool
+          # Download and use appimagetool
           curl -LO https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage
-          ARCH=${{ matrix.arch }} ./appimagetool-x86_64.AppImage --appimage-extract-and-run AppDir expe3000-${{ matrix.arch }}.AppImage
+          # Export ARCH before running appimagetool
+          export ARCH=${{ matrix.arch }}
+          ./appimagetool-x86_64.AppImage --appimage-extract-and-run AppDir expe3000-${{ matrix.arch }}.AppImage
       - name: Upload Linux Packages
         uses: actions/upload-artifact@v4
         with:
