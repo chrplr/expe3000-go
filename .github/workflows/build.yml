@@ -109,21 +109,17 @@ jobs:
           name: bin-linux-${{ matrix.arch }}
           path: build_tmp
       - name: Create Linux Packages
-        env:
-          ARCH: ${{ matrix.appimage_arch }}
         run: |
-          echo "Building AppImage for architecture: $ARCH"
-          # Ensure version starts with a digit for Debian (fallback to 0.0.0 if only hash is found)
+          # 1. Versioning
           RAW_VERSION=$(git describe --tags --always 2>/dev/null || echo "0.0.0")
           if [[ $RAW_VERSION =~ ^v?[0-9] ]]; then
             VERSION=${RAW_VERSION#v}
           else
             VERSION="0.0.0-$RAW_VERSION"
           fi
-          
           bin_dir=$(find build_tmp -maxdepth 1 -type d -name "expe3000-*" | head -n 1)
           
-          # .deb package
+          # 2. .deb package
           mkdir -p deb/usr/local/bin deb/usr/share/applications deb/usr/share/pixmaps deb/DEBIAN
           cp "$bin_dir"/expe3000* deb/usr/local/bin/
           cp expe3000.desktop deb/usr/share/applications/
@@ -137,7 +133,7 @@ jobs:
           EOF
           dpkg-deb --build deb expe3000_${VERSION}_${{ matrix.deb_arch }}.deb
 
-          # AppImage
+          # 3. AppImage preparation
           mkdir -p AppDir/usr/bin
           cp "$bin_dir"/expe3000* AppDir/usr/bin/
           cp expe3000.desktop AppDir/
@@ -152,11 +148,15 @@ jobs:
           EOF
           chmod +x AppDir/AppRun
           
+          # Download and extract appimagetool
           curl -LO https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage
           ./appimagetool-x86_64.AppImage --appimage-extract
           
-          ./squashfs-root/AppRun AppDir expe3000-${{ matrix.arch }}.AppImage
+          # Run the extracted tool DIRECTLY with ARCH exported
+          export ARCH=${{ matrix.appimage_arch }}
+          echo "Packaging for ARCH: $ARCH"
+          ./squashfs-root/usr/bin/appimagetool AppDir expe3000-${{ matrix.arch }}.AppImage
       - name: Upload Linux Packages
         uses: actions/upload-artifact@v4
         with:
