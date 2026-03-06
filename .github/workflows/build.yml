@@ -82,7 +82,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: bin-${{ matrix.artifact_os }}-${{ matrix.artifact_arch }}
-          # Changed to expe3000-* to include BOTH the folder and the zip/tar.gz
           path: expe3000-*
 
   package-linux:
@@ -107,9 +106,7 @@ jobs:
       - name: Create Linux Packages
         run: |
           VERSION=$(git describe --tags --always 2>/dev/null || echo "dev")
-          # Robust way to find the actual directory
           bin_dir=$(find build_tmp -maxdepth 1 -type d -name "expe3000-*" | head -n 1)
-          echo "Using binary directory: $bin_dir"
           
           # .deb package
           mkdir -p deb/usr/local/bin deb/usr/share/applications deb/usr/share/pixmaps deb/DEBIAN
@@ -130,10 +127,11 @@ jobs:
           cp "$bin_dir"/expe3000* AppDir/usr/bin/
           cp expe3000.desktop AppDir/
           cp gui.png AppDir/expe3000.png
-          echo -e '#!/bin/sh\nexec "$APPDIR/usr/bin/expe3000-gui" "$@"' > AppDir/AppRun
+          echo -e '#!/bin/sh\nexec "\$APPDIR/usr/bin/expe3000-gui" "\$@"' > AppDir/AppRun
           chmod +x AppDir/AppRun
           
-          curl -LO https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage
+          # Use "continuous" release which is the standard way to download appimagetool
+          curl -LO https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage
           ARCH=${{ matrix.arch }} ./appimagetool-x86_64.AppImage --appimage-extract-and-run AppDir expe3000-${{ matrix.arch }}.AppImage
       - name: Upload Linux Packages
@@ -162,16 +160,8 @@ jobs:
         shell: pwsh
         run: |
           $bin_dir = Get-ChildItem -Path build_tmp -Directory | Where-Object { $_.Name -like "expe3000-*" } | Select-Object -First 1
-          Write-Host "Using binary directory: $($bin_dir.FullName)"
           Copy-Item "$($bin_dir.FullName)\*" . -Recurse -Force
-          # Verify file exists
-          if (Test-Path "installer.nsi") {
-            & "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
-          } else {
-            Write-Error "installer.nsi not found in current directory"
-            ls
-            exit 1
-          }
+          & "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
       - name: Upload Windows Installer
         uses: actions/upload-artifact@v4
         with:
@@ -195,7 +185,6 @@ jobs:
           brew install create-dmg
           mkdir -p dist_dmg
           bin_dir=$(find build_tmp -maxdepth 1 -type d -name "expe3000-*" | head -n 1)
-          echo "Using binary directory: $bin_dir"
           cp -r "$bin_dir"/* dist_dmg/
           create-dmg \
             --volname "expe3000-go" \
