@@ -82,25 +82,36 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: bin-${{ matrix.artifact_os }}-${{ matrix.artifact_arch }}
-          path: expe3000-*.*
+          # Changed to expe3000-* to include BOTH the folder and the zip/tar.gz
+          path: expe3000-*
 
   package-linux:
-    name: Package Linux (x86_64)
+    name: Package Linux (${{ matrix.arch }})
     needs: build
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            deb_arch: amd64
+          - arch: arm64
+            deb_arch: arm64
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Download Linux x86_64 Binaries
+      - name: Download Linux Binaries
         uses: actions/download-artifact@v4
         with:
-          name: bin-linux-x86_64
+          name: bin-linux-${{ matrix.arch }}
           path: build_tmp
       - name: Create Linux Packages
         run: |
           VERSION=$(git describe --tags --always 2>/dev/null || echo "dev")
+          # Robust way to find the actual directory
           bin_dir=$(find build_tmp -maxdepth 1 -type d -name "expe3000-*" | head -n 1)
+          echo "Using binary directory: $bin_dir"
           
+          # .deb package
           mkdir -p deb/usr/local/bin deb/usr/share/applications deb/usr/share/pixmaps deb/DEBIAN
           cp "$bin_dir"/expe3000* deb/usr/local/bin/
           cp expe3000.desktop deb/usr/share/applications/
@@ -108,12 +119,13 @@ jobs:
           cat <<EOF > deb/DEBIAN/control
           Package: expe3000
           Version: ${VERSION#v}
-          Architecture: amd64
+          Architecture: ${{ matrix.deb_arch }}
           Maintainer: Christophe Pallier <christophe@pallier.org>
           Description: Multimedia stimulus delivery system for neuroscience and psychology.
           EOF
-          dpkg-deb --build deb expe3000_${VERSION}_amd64.deb
+          dpkg-deb --build deb expe3000_${VERSION}_${{ matrix.deb_arch }}.deb
 
+          # AppImage
           mkdir -p AppDir/usr/bin
           cp "$bin_dir"/expe3000* AppDir/usr/bin/
           cp expe3000.desktop AppDir/
@@ -123,11 +135,11 @@ jobs:
           
           curl -LO https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage
-          ARCH=x86_64 ./appimagetool-x86_64.AppImage --appimage-extract-and-run AppDir expe3000-x86_64.AppImage
+          ARCH=${{ matrix.arch }} ./appimagetool-x86_64.AppImage --appimage-extract-and-run AppDir expe3000-${{ matrix.arch }}.AppImage
       - name: Upload Linux Packages
         uses: actions/upload-artifact@v4
         with:
-          name: installer-linux
+          name: installer-linux-${{ matrix.arch }}
           path: |
             *.deb
             *.AppImage
@@ -149,10 +161,17 @@ jobs:
       - name: Create Installer
         shell: pwsh
         run: |
-          $bin_dir = Get-ChildItem -Path build_tmp -Directory | Select-Object -First 1
+          $bin_dir = Get-ChildItem -Path build_tmp -Directory | Where-Object { $_.Name -like "expe3000-*" } | Select-Object -First 1
+          Write-Host "Using binary directory: $($bin_dir.FullName)"
           Copy-Item "$($bin_dir.FullName)\*" . -Recurse -Force
-          # Use the full path to makensis if it's not in the PATH immediately
-          & "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
+          # Verify file exists
+          if (Test-Path "installer.nsi") {
+            & "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
+          } else {
+            Write-Error "installer.nsi not found in current directory"
+            ls
+            exit 1
+          }
       - name: Upload Windows Installer
         uses: actions/upload-artifact@v4
         with:
@@ -176,6 +195,7 @@ jobs:
           brew install create-dmg
           mkdir -p dist_dmg
           bin_dir=$(find build_tmp -maxdepth 1 -type d -name "expe3000-*" | head -n 1)
+          echo "Using binary directory: $bin_dir"
           cp -r "$bin_dir"/* dist_dmg/
           create-dmg \
             --volname "expe3000-go" \

@@ -8,6 +8,11 @@ Expe3000-go is a multimedia stimulus delivery system designed for experimental p
 
 **Building and running an experiment with expe3000 does not require any programming!** The experiment is fully described in a tabular text file (`.csv` or `.tsv`) that specifies the timings of stimuli.
 
+Stimuli are presented according to a fixed, predefined schedule. Although keypress events are saved with a timestamp, the behavior of the program cannot be modified in real-time (e.g., immediate feedback). There is no notion of "trial" and all button presses are recorded. This approach is suitable for fMRI/MEG/EEG experiments with rigid stimulus presentation schedules.
+*Note: If these constraints don't suit your needs and you're looking for a general Go library for psychology experiments, check out [goxpyriment](https://chrplr.github.io/goxpyriment).*
+
+
+
 ---
 
 ## Table of Contents
@@ -26,10 +31,6 @@ Expe3000-go is a multimedia stimulus delivery system designed for experimental p
 - [License & Credits](#license--credits)
 
 ---
-
-Stimuli are presented according to a fixed, predefined schedule. Although keypress events are saved with a timestamp, the behavior of the program cannot be modified in real-time (e.g., immediate feedback). There is no notion of "trial" and all button presses are recorded. This approach is suitable for fMRI/MEG/EEG experiments with rigid stimulus presentation schedules.
-*Note: If these constraints don't suit your needs and you're looking for a general Go library for psychology experiments, check out [goxpyriment](https://chrplr.github.io/goxpyriment).*
-
 
 
 ## Experiment Configuration (CSV)
@@ -87,13 +88,14 @@ If you just want to run the application, the easiest way is to download a pre-bu
 2.  **Choose your installer (Easiest):**
     -   **Windows:** Download **`expe3000-setup.exe`**. Run it to install the app with a guided wizard and create desktop shortcuts.
     -   **macOS:** Download **`expe3000-macos-installer.dmg`**. Open it and drag the app to your Applications folder.
-    -   **Linux (Universal):** Download **`expe3000-x86_64.AppImage`**. Right-click the file, go to **Properties > Permissions**, check **"Allow executing file as program"**, and double-click to run.
-    -   **Ubuntu/Debian:** Download the **`.deb`** file and install it by double-clicking or running `sudo apt install ./expe3000_*.deb`.
+    -   **Linux (Universal):** Download **`expe3000-x86_64.AppImage`** (for PC) or **`expe3000-arm64.AppImage`** (for Raspberry Pi). Right-click the file, go to **Properties > Permissions**, check **"Allow executing file as program"**, and double-click to run.
+    -   **Ubuntu/Debian:** Download the **`.deb`** file (choose `amd64` for PC or `arm64` for Raspberry Pi) and install it by double-clicking or running `sudo apt install ./expe3000_*.deb`.
 3.  **Alternative: Raw Binaries:** If you prefer not to use an installer, you can download the `.zip` (Windows) or `.tar.gz` (Linux/macOS) files matching your processor:
     -   **Windows:** `windows` and `x86_64`.
     -   **macOS (Apple Silicon/M1/M2):** `macos` and `arm64`.
     -   **macOS (Intel):** `macos` and `x86_64`.
-    -   **Linux:** `linux` and `x86_64`.
+    -   **Linux (PC/Intel):** `linux` and `x86_64`.
+    -   **Linux (Raspberry Pi/ARM64):** `linux` and `arm64`.
 4.  **Run:** Once installed or downloaded, you can run the application (you may need to grant permission in your security settings on macOS).
 
 ### Building from Source
