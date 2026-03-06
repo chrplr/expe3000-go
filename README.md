@@ -1,30 +1,47 @@
 # expe3000 (Go Version)
 
-**Work in progress**
+
+HTML version of this file: <http://chrplr.github.io/expe3000-go>
+Author: Christophe Pallier <christophe@pallier.org>
+
 
 A multimedia stimulus delivery system designed for experimental psychology and neuroscience tasks requiring accurate timing and low-latency audio.
 
-[This app](http://github.com/chrplr/expe3000-go) is a port of [audiovis](https://chrplr.github.io/audiovis/) to Go, using the [go-sdl3](https://github.com/Zyko0/go-sdl3) bindings (see also an [implementation in C](https://github.com/chrplr/expe3000))
- 
-## Overview
+**Building and running an experiment with expe3000 does not require any programming!** The experiment is fully described in a tabular text file (`.csv` or `.tsv`) that specifies the timings of stimuli.
 
 Stimuli are presented according to a fixed, predefined schedule. Although keypress events are saved with a timestamp, the behavior of the program cannot be modified in real-time (e.g., immediate feedback). There is no notion of "trial." This approach is suitable for fMRI/MEG/EEG experiments with rigid stimulus presentation schedules.
+*Note: If these constraints don't suit your needs and you're looking for a general Go library for psychology experiments, check out [goxpyriment](htpps://chrplr.github.io/goexpyriment).*
 
-## Quick Start
 
-If you have already built the project (using `./build.sh`) or downloaded the binaries:
+## Experiment Configuration (CSV)
 
-1. **Launch the GUI**: Run `./expe3000-gui`.
-2. **Configure**: 
-   - Click the **"..."** button next to **Experiment CSV** and select `experiment_new.csv`.
-   - Ensure the **Stimuli Directory** points to the `assets` folder.
-3. **Start**: Click the green **START** button. 
-4. **Interact**: Press any key when the "Press any key to start" message appears to begin the stimulation.
+The input CSVi or TSV file must include at least these four columns in its header: `onset_time`, `duration`, `type`, and `stimuli`. Extra columns (like `cond`) are allowed and will be preserved in the output log.
 
-Alternatively, you can run the CLI version:
-```bash
-./expe3000 -csv experiment.csv -stimuli-dir assets
+**Example (`experiment.csv`):**
+```csv
+onset_time,duration,type,stimuli
+1000,500,IMAGE,body01.png
+2000,300,IMAGE_STREAM,face01.png:200:100~face02.png:200:100~face12.png:200:100
+3000,500,TEXT,Hello !
+4000,2000,BOX,Please press\nany key
+7000,1,SOUND,sound02.wav
 ```
+
+### Stimulus Types
+- **IMAGE / SOUND / TEXT**: Standard single-item stimuli.
+- **BOX**: Displays multiline text centered on the screen. Use `\n` for literal line breaks within the `stimuli` string.
+- **IMAGE_STREAM**: Displays a sequence of images in rapid succession. 
+    - The `stimuli` column contains filenames separated by `~`.
+    - **Timing (Optional)**: Each item can use the format `filename:duration:gap`.
+        - `duration`: Time in ms to show the image.
+        - `gap`: Time in ms to show a blank screen (or fixation cross) after the image.
+    - If timing is omitted, the value from the `duration` column is used as the frame duration with a 0ms gap.
+- **TEXT_STREAM**: Displays a sequence of text strings in rapid succession. Supports the same `:duration:gap` timing format.
+- **SOUND_STREAM**: Plays a sequence of sound files. Supports the same `:duration:gap` format, where `duration` is the SOA (Stimulus Onset Asynchrony).
+
+**Notes on Timing:**
+- For `SOUND` types, the `duration` column is required but the sound will play until completion (use `1` or any placeholder value).
+- All timestamps in the CSV and output logs are in milliseconds.
 
 ## Features
 
@@ -37,41 +54,35 @@ Alternatively, you can run the CLI version:
 - **Cross-Platform:** Binaries available for Linux, Windows, and macOS (x86_64 and ARM64).
 - **Serial Triggers:** Support for DLP-IO8-G devices via `go.bug.st/serial` (no CGo required).
 
-## Prerequisites
+## GUI Interface
 
-- **Go 1.25** or later (for building from source).
-- **SDL3 libraries**: 
-  - **Windows**: DLLs are bundled or handled by the build system.
-  - **macOS**: `brew install sdl3 sdl3_image sdl3_ttf`
-  - **Linux**: Install `sdl3`, `sdl3_image`, and `sdl3_ttf` via your package manager (e.g., `apt install libsdl3-0 libsdl3-image-0 libsdl3-ttf-0`).
+There are two apps: a command line one (`expe3000`) and a graphical one (`expe3000-gui`). Here is a screenshot of the graphical interface:
+
+![](gui.png)
+
+
 
 ## Installation & Building
 
+### Prerequisites
+- **Go 1.25** or later (only if building from source).
+- **SDL3 libraries**: 
+  - **Windows**: DLLs are typically bundled with releases.
+  - **macOS**: `brew install sdl3 sdl3_image sdl3_ttf`
+  - **Linux**: Install `sdl3`, `sdl3_image`, and `sdl3_ttf` via your package manager (e.g., `apt install libsdl3-0 libsdl3-image-0 libsdl3-ttf-0`).
+
 ### Precompiled Binaries
-Check the [GitHub Releases](https://github.com/chrplr/expe3000-go/releases) for automated builds for your platform.
-
+Check the [GitHub Releases](https://github.com/chrplr/expe3000-go/releases) for automated builds.
 Artifacts are named `expe3000-<version>-<os>-<arch>-binary`. Choose the one matching your system:
-
 - **OS**: `linux`, `windows`, or `macos`.
-- **Architecture**:
-    - **x86_64**: For Intel or AMD 64-bit processors.
-    - **arm64**: For Apple Silicon (M1/M2/M3/M4) or ARM-based Windows/Linux machines.
-
-**How to check your architecture:**
-- **Linux/macOS**: Open a terminal and run `uname -m`.
-  - `x86_64` → Download the **x86_64** version.
-  - `arm64` or `aarch64` → Download the **arm64** version.
-- **Windows**: Open a command prompt and run `echo %PROCESSOR_ARCHITECTURE%` or check **Settings > System > About**.
-  - `AMD64` → Download the **x86_64** version.
-  - `ARM64` → Download the **arm64** version.
+- **Architecture**: `x86_64` (Intel/AMD) or `arm64` (Apple Silicon/ARM).
 
 ### Building from Source
-To build both the CLI and GUI versions with version metadata:
+To build both the CLI and GUI versions:
 ```bash
 ./build.sh
 ```
-
-Alternatively, for a simple build:
+Alternatively:
 ```bash
 go build -o expe3000 ./cmd/expe3000
 go build -o expe3000-gui ./cmd/expe3000-gui
@@ -79,65 +90,37 @@ go build -o expe3000-gui ./cmd/expe3000-gui
 
 ## Usage
 
+### Quick Start
+1. **Launch the GUI**: Run `./expe3000-gui`.
+2. **Configure**: 
+   - Click **"..."** next to **Experiment CSV** and select `experiment_new.csv`.
+   - Ensure **Stimuli Directory** points to the `assets` folder.
+3. **Start**: Click the green **START** button. 
+4. **Interact**: Press any key when the "Press any key to start" message appears.
+5. **Exit**: Press **Escape** at any time to interrupt the experiment.
+
 ### GUI Mode
-Running the GUI version opens an **Interactive Setup Window**:
-```bash
-./expe3000-gui
-```
-- **Select Files**: Browse for Experiment CSV, Stimuli Directory, and Output file.
-- **Set Resolution**: Choose from common experimental resolutions.
-- **Toggle Features**: Enable/disable fixation cross and Fullscreen mode.
-- **Launch**: Click **START** once the CSV path is configured.
+The GUI provides an interactive setup window to configure file paths, resolution, and experimental options (like fixation cross and fullscreen). Settings are automatically cached for the next session.
 
 ### CLI Mode
+For automated or console-only environments:
 ```bash
 ./expe3000 -csv experiment.csv [options]
 ```
-
-#### Options
-- `-csv`: Path to the stimulus CSV file (required).
+**Common Options:**
+- `-csv`: Path to the stimulus CSV or TSV file (required).
 - `-stimuli-dir`: Directory containing image and sound assets.
-- `-font`: Path to a TTF font file for text stimuli.
+- `-font`: Path to a TTF font file.
 - `-output`: Path for the results CSV file (default: `results.csv`).
-- `-width`, `-height`: Screen resolution (default: 1920x1080).
-- `-font-size`: Font size for text stimuli (default: 50).
 - `-fullscreen`: Run in fullscreen mode.
-- `-no-vsync`: Disable VSync (not recommended for precise timing).
-- `-no-fixation`: Disable the fixation cross.
-- `-dlp`: Serial device path for DLP-IO8-G triggers (e.g., `/dev/ttyUSB0` or `COM3`).
-- `-version`: Print version info and exit.
+- `-dlp`: Serial device path for DLP-IO8-G triggers (e.g., `/dev/ttyUSB0`).
 
-## Experiment Configuration (CSV)
-
-The input CSV file must include at least these four columns in its header: `onset_time`, `duration`, `type`, and `stimuli`. Extra columns (like `cond`) are allowed and will be preserved in the output log.
-
-**Example (`experiment.csv`):**
-```csv
-onset_time,duration,type,stimuli
-1000,500,IMAGE,body01.png
-2000,300,IMAGE_STREAM,face01.png:200:100~face02.png:200:100~face12.png:200:100
-3000,500,TEXT,Hello !
-4000,2000,BOX,Please press\nany key
-7000,1,SOUND,sound02.wav
-```
-- **Types**: `IMAGE`, `SOUND`, `TEXT`, `BOX`, `IMAGE_STREAM`, `TEXT_STREAM`, `SOUND_STREAM`.
-- **BOX**: Displays multiline text centered on the screen. Use `\n` for literal line breaks within the `stimuli` string.
-- **IMAGE_STREAM**: Displays a sequence of images in rapid succession. 
-    - The `stimuli` column contains filenames separated by `~`.
-    - **Timing (Optional)**: Each item can use the format `filename:duration:gap`.
-        - `duration`: Time in ms to show the image.
-        - `gap`: Time in ms to show a blank screen (or fixation cross) after the image.
-    - If timing is omitted, the value from the `duration` column is used as the frame duration with a 0ms gap.
-- **TEXT_STREAM**: Displays a sequence of text strings in rapid succession. Supports the same `:duration:gap` timing format.
-- **SOUND_STREAM**: Plays a sequence of sound files. Supports the same `:duration:gap` format, where `duration` is the SOA (Stimulus Onset Asynchrony).
-- **Note**: For `SOUND`, use `1` (or any small value) as they play until finished, but the duration column is still required.
-- **Escape**: Press **Escape** at any time to interrupt the experiment.
-
-
-Note: Under Linux, you can minimize video latencies by running the cli version of expe3000  from a linux console (e.g. by pressing Ctrl-Alt-F3) and after stopping the graphics server with `systemctl stop gdm`. Thus, you will bypass x11 or wayland composers and use the Direct Rendering Manager kernel module. 
-
+### Linux Performance Note
+To minimize video latencies on Linux, run the CLI version from a TTY console (e.g., Ctrl-Alt-F3) after stopping the display manager (e.g., `systemctl stop gdm`). This allows the app to bypass Wayland/X11 and use the **Direct Rendering Manager (DRM)** directly.
 
 ## License & Credits
+
+[This app](http://github.com/chrplr/expe3000-go) is a port of [audiovis](https://chrplr.github.io/audiovis/) to Go, using the [go-sdl3](https://github.com/Zyko0/go-sdl3) bindings (see also an [implementation in C](https://github.com/chrplr/expe3000)).
 
 Developed by [Christophe Pallier](http://www.pallier.org) <christophe@pallier.org> using [Gemini CLI](https://github.com/google/gemini-cli).
 

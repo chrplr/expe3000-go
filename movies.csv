@@ -1,12 +1,2 @@
 onset_time,duration,type,stimuli
-2000,20240,video,1196404s1.mov
-24240,20640,video,1196404s2.mov
-46880,18600,video,1196404s3.mov
-67480,18600,video,1196404s4.mov
-88080,19240,video,1196404s5.mov
-109320,20350,video,aao3539_s1.mov
-131670,20350,video,aao3539_s2.mov
-154020,19433,video,aao3539_s3.mov
-175453,19433,video,aao3539_s4.mov
-196886,20183,video,aao3539_s5.mov
-219069,20166,video,aao3539_s6.mov
+2000,1,video,bonatti1.gv
