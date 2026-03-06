@@ -19,10 +19,6 @@ jobs:
             goarch: amd64
             artifact_os: linux
             artifact_arch: x86_64
-          - goos: linux
-            goarch: arm64
-            artifact_os: linux
-            artifact_arch: arm64
           - goos: windows
             goarch: amd64
             artifact_os: windows
@@ -95,9 +91,6 @@ jobs:
           - arch: x86_64
             deb_arch: amd64
             appimage_arch: x86_64
-          - arch: arm64
-            deb_arch: arm64
-            appimage_arch: aarch64
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
