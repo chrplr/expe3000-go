@@ -56,7 +56,7 @@ jobs:
       - name: Build
         run: |
           mkdir -p dist
-          VERSION=$(git describe --tags --always 2>/dev/null || echo "dev")
+          VERSION=$(git describe --tags --always 2>/dev/null || echo "0.0.0-dev")
           COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
           BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           LDFLAGS="-X 'expe3000/internal/version.Version=$VERSION' -X 'expe3000/internal/version.GitCommit=$COMMIT' -X 'expe3000/internal/version.BuildTime=$BUILD_TIME'"
@@ -101,6 +101,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Download Linux Binaries
         uses: actions/download-artifact@v4
         with:
@@ -111,7 +113,14 @@ jobs:
           ARCH: ${{ matrix.appimage_arch }}
         run: |
           echo "Building AppImage for architecture: $ARCH"
-          VERSION=$(git describe --tags --always 2>/dev/null || echo "dev")
+          # Ensure version starts with a digit for Debian (fallback to 0.0.0 if only hash is found)
+          RAW_VERSION=$(git describe --tags --always 2>/dev/null || echo "0.0.0")
+          if [[ $RAW_VERSION =~ ^v?[0-9] ]]; then
+            VERSION=${RAW_VERSION#v}
+          else
+            VERSION="0.0.0-$RAW_VERSION"
+          fi
+          
           bin_dir=$(find build_tmp -maxdepth 1 -type d -name "expe3000-*" | head -n 1)
           
           # .deb package
@@ -121,7 +130,7 @@ jobs:
           cp gui.png deb/usr/share/pixmaps/expe3000.png
           cat <<EOF > deb/DEBIAN/control
           Package: expe3000
-          Version: ${VERSION#v}
+          Version: ${VERSION}
           Architecture: ${{ matrix.deb_arch }}
           Maintainer: Christophe Pallier <christophe@pallier.org>
           Description: Multimedia stimulus delivery system for neuroscience and psychology.
@@ -134,7 +143,6 @@ jobs:
           cp expe3000.desktop AppDir/
           cp gui.png AppDir/expe3000.png
           
-          # Use a robust AppRun script
           cat <<'EOF' > AppDir/AppRun
           #!/bin/sh
           SELF=$(readlink -f "$0")
@@ -144,7 +152,6 @@ jobs:
           EOF
           chmod +x AppDir/AppRun
           
-          # Download and use appimagetool
           curl -LO https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage
           ./appimagetool-x86_64.AppImage --appimage-extract
