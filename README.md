@@ -11,7 +11,8 @@ Expe3000-go is multimedia stimulus delivery system designed for experimental psy
 **Building and running an experiment with expe3000 does not require any programming!** The experiment is fully described in a tabular text file (`.csv` or `.tsv`) that specifies the timings of stimuli.
 
 Stimuli are presented according to a fixed, predefined schedule. Although keypress events are saved with a timestamp, the behavior of the program cannot be modified in real-time (e.g., immediate feedback). There is no notion of "trial." This approach is suitable for fMRI/MEG/EEG experiments with rigid stimulus presentation schedules.
-*Note: If these constraints don't suit your needs and you're looking for a general Go library for psychology experiments, check out [goxpyriment](htpps://chrplr.github.io/goexpyriment).*
+*Note: If these constraints don't suit your needs and you're looking for a general Go library for psychology experiments, check out [goxpyriment](https://chrplr.github.io/goxpyriment).*
+
 
 
 ## Experiment Configuration (CSV)
