@@ -89,6 +89,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         include:
           - arch: x86_64
@@ -127,21 +128,28 @@ jobs:
           EOF
           dpkg-deb --build deb expe3000_${VERSION}_${{ matrix.deb_arch }}.deb
 
-          # AppImage preparation
+          # AppImage
           mkdir -p AppDir/usr/bin
           cp "$bin_dir"/expe3000* AppDir/usr/bin/
           cp expe3000.desktop AppDir/
           cp gui.png AppDir/expe3000.png
-          echo -e '#!/bin/sh\nexec "$APPDIR/usr/bin/expe3000-gui" "$@"' > AppDir/AppRun
+          
+          # Use a robust AppRun script
+          cat <<'EOF' > AppDir/AppRun
+          #!/bin/sh
+          SELF=$(readlink -f "$0")
+          HERE=${SELF%/*}
+          export PATH="${HERE}/usr/bin/:${PATH}"
+          exec "${HERE}/usr/bin/expe3000-gui" "$@"
+          EOF
           chmod +x AppDir/AppRun
           
-          # Download and extract appimagetool to avoid FUSE issues
+          # Download and use appimagetool
           curl -LO https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage
           ./appimagetool-x86_64.AppImage --appimage-extract
           
-          # Run the extracted tool with ARCH environment variable
-          ARCH=${{ matrix.appimage_arch }} ./squashfs-root/AppRun AppDir expe3000-${{ matrix.arch }}.AppImage
+          ./squashfs-root/AppRun AppDir expe3000-${{ matrix.arch }}.AppImage
       - name: Upload Linux Packages
         uses: actions/upload-artifact@v4
         with:
