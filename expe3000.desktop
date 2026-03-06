@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=expe3000-go
+Comment=Multimedia stimulus delivery system
+Exec=expe3000-gui
+Icon=expe3000
+Categories=Science;Education;
+Terminal=false
