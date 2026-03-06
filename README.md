@@ -1,11 +1,10 @@
 # expe3000 (Go Version)
 
-
 HTML version of this file: <http://chrplr.github.io/expe3000-go>
+
 Author: Christophe Pallier <christophe@pallier.org>
 
-
-A multimedia stimulus delivery system designed for experimental psychology and neuroscience tasks requiring accurate timing and low-latency audio.
+Expe3000-go is multimedia stimulus delivery system designed for experimental psychology and neuroscience tasks requiring accurate timing and low-latency audio.
 
 **Building and running an experiment with expe3000 does not require any programming!** The experiment is fully described in a tabular text file (`.csv` or `.tsv`) that specifies the timings of stimuli.
 
@@ -43,6 +42,8 @@ onset_time,duration,type,stimuli
 - For `SOUND` types, the `duration` column is required but the sound will play until completion (use `1` or any placeholder value).
 - All timestamps in the CSV and output logs are in milliseconds.
 
+---
+
 ## Features
 
 - **Precise Timing:** High-resolution timing loop with VSYNC synchronization and predictive onset look-ahead.
@@ -54,22 +55,9 @@ onset_time,duration,type,stimuli
 - **Cross-Platform:** Binaries available for Linux, Windows, and macOS (x86_64 and ARM64).
 - **Serial Triggers:** Support for DLP-IO8-G devices via `go.bug.st/serial` (no CGo required).
 
-## GUI Interface
+---
 
-There are two apps: a command line one (`expe3000`) and a graphical one (`expe3000-gui`). Here is a screenshot of the graphical interface:
-
-![](gui.png)
-
-
-
-## Installation & Building
-
-### Prerequisites
-- **Go 1.25** or later (only if building from source).
-- **SDL3 libraries**: 
-  - **Windows**: DLLs are typically bundled with releases.
-  - **macOS**: `brew install sdl3 sdl3_image sdl3_ttf`
-  - **Linux**: Install `sdl3`, `sdl3_image`, and `sdl3_ttf` via your package manager (e.g., `apt install libsdl3-0 libsdl3-image-0 libsdl3-ttf-0`).
+## Installation
 
 ### Precompiled Binaries
 Check the [GitHub Releases](https://github.com/chrplr/expe3000-go/releases) for automated builds.
@@ -78,6 +66,15 @@ Artifacts are named `expe3000-<version>-<os>-<arch>-binary`. Choose the one matc
 - **Architecture**: `x86_64` (Intel/AMD) or `arm64` (Apple Silicon/ARM).
 
 ### Building from Source
+
+#### Prerequisites
+- **Go 1.25** or later (only if building from source).
+- **SDL3 libraries**: 
+  - **Windows**: DLLs are typically bundled with releases.
+  - **macOS**: `brew install sdl3 sdl3_image sdl3_ttf`
+  - **Linux**: Install `sdl3`, `sdl3_image`, and `sdl3_ttf` via your package manager (e.g., `apt install libsdl3-0 libsdl3-image-0 libsdl3-ttf-0`).
+
+
 To build both the CLI and GUI versions:
 ```bash
 ./build.sh
@@ -88,7 +85,13 @@ go build -o expe3000 ./cmd/expe3000
 go build -o expe3000-gui ./cmd/expe3000-gui
 ```
 
+---
+
 ## Usage
+
+There are two apps: a command line one (`expe3000`) and a graphical one (`expe3000-gui`). Here is a screenshot of the graphical interface:
+
+![](gui.png)
 
 ### Quick Start
 1. **Launch the GUI**: Run `./expe3000-gui`.
@@ -118,7 +121,7 @@ For automated or console-only environments:
 ### Linux Performance Note
 To minimize video latencies on Linux, run the CLI version from a TTY console (e.g., Ctrl-Alt-F3) after stopping the display manager (e.g., `systemctl stop gdm`). This allows the app to bypass Wayland/X11 and use the **Direct Rendering Manager (DRM)** directly.
 
-## License & Credits
+# License & Credits
 
 [This app](http://github.com/chrplr/expe3000-go) is a port of [audiovis](https://chrplr.github.io/audiovis/) to Go, using the [go-sdl3](https://github.com/Zyko0/go-sdl3) bindings (see also an [implementation in C](https://github.com/chrplr/expe3000)).
 
